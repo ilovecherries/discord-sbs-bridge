@@ -1,15 +1,18 @@
 import discord, json, aiohttp, asyncio
-from discord.webhook import AsyncWebhookAdapter
 
 config = {
     'discord_token': '[REDACTED]',
     'sbs_token': '[REDACTED]',
-    'discord_uid': '[REDACTED]',
+    # 'discord_uid': '[PUT DISCORD USER ID IN HERE FOR SINGLE USER MODE]',
     'api_url': 'https://smilebasicsource.com/api/'
 }
 
 # dictionary to hold all of the channel bindings
 channels = {}
+# holds all of the users
+users = {}
+
+sbs_id = -1
 
 client = discord.Client()
 
@@ -23,6 +26,15 @@ async def initial_poll():
         async with session.get(url) as response:
             return json.loads(await response.text())['comment'][0]['id']
 
+async def get_sbs_id():
+    headers = {
+        'Authorization': 'Bearer ' + config['sbs_token']
+    }
+    url = config['api_url'] + 'User/me'
+    async with aiohttp.ClientSession(headers=headers) as session:
+        async with session.get(url) as response:
+            return json.loads(await response.text())['id']
+
 async def send_discord_message(channel_id, comment, userlist):
     def get_sbs_avatar(id):
         return config['api_url'] + 'File/raw/' + str(id) + '?size=128&crop=true'
@@ -30,7 +42,6 @@ async def send_discord_message(channel_id, comment, userlist):
     content = comment['content']
     channel = client.get_channel(int(channel_id))
     webhooks = await channel.webhooks()
-    print(webhooks)
     hook = None
     try:
         hook = next(x for x in webhooks if str(x.user.id) == str(client.user.id))
@@ -41,6 +52,7 @@ async def send_discord_message(channel_id, comment, userlist):
     await hook.send(content, username=user['username'], avatar_url=get_sbs_avatar(user['avatar']))
 
 async def poll_messages(last_id):
+    global sbs_id
     listener_settings = {
         'lastId': last_id,
         'chains': ['comment.0id', 'user.1createUserId', 'content.1parentId']
@@ -58,7 +70,8 @@ async def poll_messages(last_id):
                 userlist = data['user']
                 for i in data['comment']:
                     pid = str(i['parentId'])
-                    if (i['createDate'] == i['editDate']) and (i['deleted'] == False) and pid in channels.values():
+                    protect_self = ('discord_uid' in config) or (i['createUserId'] != sbs_id)
+                    if protect_self and (i['createDate'] == i['editDate']) and (i['deleted'] == False) and pid in channels.values():
                         for dis_channel, sbs_channel in channels.items():
                             if str(sbs_channel) == str(pid):
                                 await send_discord_message(dis_channel, i, userlist)
@@ -68,14 +81,14 @@ async def poll_messages(last_id):
     except json.decoder.JSONDecodeError:
         return last_id
 
-async def send_to_sbs(channel, content):
+async def send_to_sbs(channel, content, user_token):
     message = {
         'parentId': int(channel),
         'content': content
     }
     headers = {
         'Content-Type': 'application/json', 
-        'Authorization': 'Bearer ' + config['sbs_token']
+        'Authorization': 'Bearer ' + user_token 
     }
     url = config['api_url'] + 'Comment'
     async with aiohttp.ClientSession(headers=headers) as session:
@@ -85,19 +98,43 @@ async def send_to_sbs(channel, content):
 @client.event
 async def on_ready():
     print('BINDED')
+    global sbs_id
+    sbs_id = await get_sbs_id()
 
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
-    elif message.content.startswith('$bind'):
+    elif message.content.startswith('$bindchat'):
         args = message.content.split(' ')
         if len(args) == 2:
             channels[str(message.channel.id)] = str(args[1])
-            await message.channel.send('Successfully binded!')
-    elif (str(message.author.id) == str(config['discord_uid'])) and (str(message.channel.id) in channels.keys()):
-        await send_to_sbs(channels[str(message.channel.id)], message.content)
+            await message.channel.send('Successfully binded channel!')
+    elif (not 'discord_uid' in config) and message.content.startswith('$binduser'):
+        args = message.content.split(' ')
         await message.delete()
+        if len(args) == 2:
+            users[str(message.author.id)] = str(args[1])
+            await message.author.send('Successfully binded user!')
+    elif (str(message.channel.id) in channels.keys()):
+        # for single-user use
+        if 'discord_uid' in config:
+            if config['discord_uid'] == str(message.author.id):
+                await send_to_sbs(channels[str(message.channel.id)], message.content, config['sbs_token'])
+                await message.delete()
+        elif (str(message.author.id) in users.keys()):
+            await send_to_sbs(channels[str(message.channel.id)], message.content, users[str(message.author.id)])
+            await message.delete()
+        else:
+            webhooks = await message.channel.webhooks()
+            try:
+                hook = next(x for x in webhooks if str(x.user.id) == str(client.user.id))
+                if not (hook.id == message.author.id):
+                    await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + ">: " + message.content, config['sbs_token'])
+            except StopIteration:
+                await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + ">: " + message.content, config['sbs_token'])
+
+            pass
 
 async def polling():
     await client.wait_until_ready()
