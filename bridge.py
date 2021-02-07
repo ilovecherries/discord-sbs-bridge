@@ -1,66 +1,76 @@
-import discord, json, requests, aiohttp, asyncio
+import discord, json, aiohttp, asyncio
 from discord.webhook import AsyncWebhookAdapter
 
 config = {
     'discord_token': '[REDACTED]',
     'sbs_token': '[REDACTED]',
-    'discord_channel': '[REDACTED]',
     'discord_uid': '[REDACTED]',
-    'sbs_channel': 937,
-    'webhook_url': '[REDACTED]',
     'api_url': 'https://smilebasicsource.com/api/'
 }
 
-def get_sbs_avatar(id):
-    return config['api_url'] + 'File/raw/' + str(id) + '?size=128&crop=true'
+# dictionary to hold all of the channel bindings
+channels = {}
 
 client = discord.Client()
 
 async def initial_poll():
     comments_settings = {
-        'parentIds': [config['sbs_channel']],
         'reverse': True,
         'limit': 1
     }
     url = config['api_url'] + 'Read/chain/?requests=comment-' + json.dumps(comments_settings, separators=(',', ':')) + '&requests=user.0createUserId&content.0parentId'
-    response = json.loads(requests.get(url).text)
-    comments = response['comment']
-    channel = client.get_channel(int(config['discord_channel']))
-    await send_sbs_message(comments[0], response['user'])
-    return comments[0]['id']
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return json.loads(await response.text())['comment'][0]['id']
 
-async def send_sbs_message(comment, userlist):
+async def send_discord_message(channel_id, comment, userlist):
+    def get_sbs_avatar(id):
+        return config['api_url'] + 'File/raw/' + str(id) + '?size=128&crop=true'
     user = next(item for item in userlist if item['id'] == comment['createUserId'])
     content = comment['content']
+    channel = client.get_channel(int(channel_id))
+    webhooks = await channel.webhooks()
+    print(webhooks)
+    hook = None
+    try:
+        hook = next(x for x in webhooks if str(x.user.id) == str(client.user.id))
+    except StopIteration:
+        hook = await channel.create_webhook(name='SmileBASIC Source Bridge')
     if '\n' in content:
         content = content[content.index('\n'):]
-    async with aiohttp.ClientSession() as session:
-        webhook = discord.Webhook.from_url(config['webhook_url'], adapter=AsyncWebhookAdapter(session))
-        await webhook.send(content, username=user['username'], avatar_url=get_sbs_avatar(user['avatar']))
+    await hook.send(content, username=user['username'], avatar_url=get_sbs_avatar(user['avatar']))
 
 async def poll_messages(last_id):
     listener_settings = {
         'lastId': last_id,
         'chains': ['comment.0id', 'user.1createUserId', 'content.1parentId']
     }
+    headers = {
+        'Authorization': 'Bearer ' + config['sbs_token']
+    }
     url = config['api_url'] + 'Read/listen?actions=' + json.dumps(listener_settings, separators=(',', ':'))
     try:
-        async with aiohttp.ClientSession(headers={'Authorization': 'Bearer ' + config['sbs_token']}) as session:
+        async with aiohttp.ClientSession(headers=headers) as session:
             async with session.get(url) as response:
-                data = json.loads(await response.text())['chains']
+                data = json.loads(await response.text())
+                last_id = data['lastId']
+                data = data['chains']
                 userlist = data['user']
                 for i in data['comment']:
-                    if int(i['parentId']) == config['sbs_channel']:
-                        await send_sbs_message(i, userlist)
-                return data['comment'][-1]['id']
+                    pid = str(i['parentId'])
+                    if (i['createDate'] == i['editDate']) and (i['deleted'] == False) and pid in channels.values():
+                        for dis_channel, sbs_channel in channels.items():
+                            if str(sbs_channel) == str(pid):
+                                await send_discord_message(dis_channel, i, userlist)
+                return last_id
     except asyncio.exceptions.TimeoutError:
         return last_id
     except json.decoder.JSONDecodeError:
         return last_id
 
-async def send_to_sbs(content):
+async def send_to_sbs(channel, content):
     message = {
-        'parentId': int(config['sbs_channel']),
+        'parentId': int(channel),
         'content': content
     }
     headers = {
@@ -69,7 +79,7 @@ async def send_to_sbs(content):
     }
     url = config['api_url'] + 'Comment'
     async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.post(url, data=json.dumps(message)) as response:
+        async with session.post(url, data=json.dumps(message)):
             return
 
 @client.event
@@ -80,10 +90,14 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-    elif str(message.author.id) == str(config['discord_uid']):
-        content = message.content
+    elif message.content.startswith('$bind'):
+        args = message.content.split(' ')
+        if len(args) == 2:
+            channels[str(message.channel.id)] = str(args[1])
+            await message.channel.send('Successfully binded!')
+    elif (str(message.author.id) == str(config['discord_uid'])) and (str(message.channel.id) in channels.keys()):
+        await send_to_sbs(channels[str(message.channel.id)], message.content)
         await message.delete()
-        await send_to_sbs(content)
 
 async def polling():
     await client.wait_until_ready()
