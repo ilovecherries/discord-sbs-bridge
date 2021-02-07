@@ -1,4 +1,5 @@
-import discord, json, aiohttp, asyncio
+import discord, json, aiohttp, asyncio, requests
+from PIL import Image
 
 config = {
     'discord_token': '[REDACTED]',
@@ -13,6 +14,8 @@ config = {
 channels = {}
 # holds all of the users
 users = {}
+# holds all avatar associations
+avatars = {}
 
 sbs_id = -1
 
@@ -91,10 +94,15 @@ async def poll_messages(last_id):
     except json.decoder.JSONDecodeError:
         return last_id
 
-async def send_to_sbs(channel, content, user_token):
+async def send_to_sbs(channel, content, user_token, avatar=None):
+    settings = {
+        'm': '12y'
+    }
+    if avatar:
+        settings['a'] = int(avatar)
     message = {
         'parentId': int(channel),
-        'content': content
+        'content': json.dumps(settings)+'\n'+content
     }
     headers = {
         'Content-Type': 'application/json', 
@@ -127,18 +135,32 @@ async def on_message(message):
             users[str(message.author.id)] = str(args[1])
             await message.author.send('Successfully bound user!')
     elif (str(message.channel.id) in channels.keys()):
+        content = message.content
+        for i in message.attachments:
+            content += '\n!' + i.url
         # for single-user use
         if 'discord_uid' in config:
             if config['discord_uid'] == str(message.author.id):
-                await send_to_sbs(channels[str(message.channel.id)], message.content, config['sbs_token'])
+                await send_to_sbs(channels[str(message.channel.id)], content, config['sbs_token'])
                 await message.delete()
         elif (str(message.author.id) in users.keys()):
-            await send_to_sbs(channels[str(message.channel.id)], message.content, users[str(message.author.id)])
+            await send_to_sbs(channels[str(message.channel.id)], content, users[str(message.author.id)])
             await message.delete()
         else:
             webhooks = await message.channel.webhooks()
             async def send_anon_message():
-                await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + "> " + message.content, config['sbs_token'])
+                if not (str(message.author.id) in avatars.keys()):
+                    headers = {'Authorization': 'Bearer ' + config['sbs_token']}
+                    r = requests.get(message.author.avatar_url)
+                    filename='img/'+str(message.author.id)+'.'
+                    with open(filename+'webp', 'wb') as f:
+                        f.write(r.content)
+                    img = Image.open(filename+'webp').convert('RGB')
+                    img.save(filename+'png', 'png')
+                    f = {'file': open(filename+'png', 'rb')}
+                    data = requests.post(config['api_url'] + 'File', headers=headers, files=f).text
+                    avatars[str(message.author.id)] = str(json.loads(data)['id'])
+                await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + "> " + content, config['sbs_token'], avatars[str(message.author.id)])
             try:
                 hook = next(x for x in webhooks if str(x.user.id) == str(client.user.id))
                 if not (hook.id == message.author.id):
@@ -152,7 +174,32 @@ async def polling():
     while True:
         last_id = await poll_messages(last_id)
 
+def load_data():
+    global channels, users, avatars
+    try:
+        with open('save.json', 'r') as save_file:
+            save_data = json.loads(save_file.read())
+            channels = save_data['channels'] 
+            users = save_data['users'] 
+            avatars = save_data['avatars'] 
+    except FileNotFoundError:
+        return
+
+async def save_loop():
+    while True:
+        await asyncio.sleep(30)
+        with open('save.json', 'w') as save_file:
+            save_data = {
+                'channels': channels,
+                'users': users,
+                'avatars': avatars
+            }
+            save_file.write(json.dumps(save_data))
+
+load_data()
+
 client.loop.create_task(polling())
+client.loop.create_task(save_loop())
 
 client.run(config['discord_token'])
 
