@@ -7,6 +7,8 @@ config = {
     'api_url': 'https://smilebasicsource.com/api/'
 }
 
+# TODO: images
+
 # dictionary to hold all of the channel bindings
 channels = {}
 # holds all of the users
@@ -48,8 +50,15 @@ async def send_discord_message(channel_id, comment, userlist):
     except StopIteration:
         hook = await channel.create_webhook(name='SmileBASIC Source Bridge')
     if '\n' in content:
-        content = content[content.index('\n'):]
-    await hook.send(content, username=user['username'], avatar_url=get_sbs_avatar(user['avatar']))
+        try:
+            msgdata = json.loads(content[:content.index('\n')])
+            content = content[content.index('\n'):]
+        except json.decoder.JSONDecodeError:
+            pass
+    try:
+        await hook.send(content, username=user['username'], avatar_url=get_sbs_avatar(user['avatar']))
+    except discord.errors.HTTPException:
+        await channel.send('Sorry, a message couldn\'t make it through. Possibly due to a limitation in Discord\'s API.')
 
 async def poll_messages(last_id):
     global sbs_id
@@ -72,7 +81,8 @@ async def poll_messages(last_id):
                     pid = str(i['parentId'])
                     protect_self = ('discord_uid' in config) or (i['createUserId'] != sbs_id)
                     if protect_self and (i['createDate'] == i['editDate']) and (i['deleted'] == False) and pid in channels.values():
-                        for dis_channel, sbs_channel in channels.items():
+                        items = channels.items()
+                        for dis_channel, sbs_channel in items:
                             if str(sbs_channel) == str(pid):
                                 await send_discord_message(dis_channel, i, userlist)
                 return last_id
@@ -109,13 +119,13 @@ async def on_message(message):
         args = message.content.split(' ')
         if len(args) == 2:
             channels[str(message.channel.id)] = str(args[1])
-            await message.channel.send('Successfully binded channel!')
+            await message.channel.send('Successfully bound channel!')
     elif (not 'discord_uid' in config) and message.content.startswith('$binduser'):
         args = message.content.split(' ')
         await message.delete()
         if len(args) == 2:
             users[str(message.author.id)] = str(args[1])
-            await message.author.send('Successfully binded user!')
+            await message.author.send('Successfully bound user!')
     elif (str(message.channel.id) in channels.keys()):
         # for single-user use
         if 'discord_uid' in config:
@@ -127,14 +137,14 @@ async def on_message(message):
             await message.delete()
         else:
             webhooks = await message.channel.webhooks()
+            async def send_anon_message():
+                await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + "> " + message.content, config['sbs_token'])
             try:
                 hook = next(x for x in webhooks if str(x.user.id) == str(client.user.id))
                 if not (hook.id == message.author.id):
-                    await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + ">: " + message.content, config['sbs_token'])
+                    await send_anon_message()
             except StopIteration:
-                await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + ">: " + message.content, config['sbs_token'])
-
-            pass
+                await send_anon_message()
 
 async def polling():
     await client.wait_until_ready()
