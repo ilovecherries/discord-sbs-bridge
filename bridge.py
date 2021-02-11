@@ -5,7 +5,9 @@ config = {
     'discord_token': '[REDACTED]',
     'sbs_token': '[REDACTED]',
     # 'discord_uid': '[PUT DISCORD USER ID IN HERE FOR SINGLE USER MODE]',
-    'api_url': 'https://smilebasicsource.com/api/'
+    'api_url': 'https://smilebasicsource.com/api/',
+    'allow_userbinds': False,
+    'allow_discord_messages': True
 }
 
 # TODO: images
@@ -26,19 +28,26 @@ async def initial_poll():
         'reverse': True,
         'limit': 1
     }
-    url = config['api_url'] + 'Read/chain/?requests=comment-' + json.dumps(comments_settings, separators=(',', ':')) + '&requests=user.0createUserId&content.0parentId'
+    url = f"{config['api_url']}Read/chain/?requests=comment-{json.dumps(comments_settings, separators=(',', ':'))}&requests=user.0createUserId&content.0parentId"
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             return json.loads(await response.text())['comment'][0]['id']
 
 async def get_sbs_id():
     headers = {
-        'Authorization': 'Bearer ' + config['sbs_token']
+        'Authorization': f"Bearer {config['sbs_token']}"
     }
-    url = config['api_url'] + 'User/me'
+    url = f"{config['api_url']}User/me"
     async with aiohttp.ClientSession(headers=headers) as session:
         async with session.get(url) as response:
             return json.loads(await response.text())['id']
+
+async def get_webhook(channel):
+    webhooks = await channel.webhooks()
+    try:
+        return next(x for x in webhooks if str(x.user.id) == str(client.user.id))
+    except StopIteration:
+        return await channel.create_webhook(name='SmileBASIC Source Bridge')
 
 async def send_discord_message(channel_id, comment, userlist):
     def get_sbs_avatar(id):
@@ -46,22 +55,22 @@ async def send_discord_message(channel_id, comment, userlist):
     user = next(item for item in userlist if item['id'] == comment['createUserId'])
     content = comment['content']
     channel = client.get_channel(int(channel_id))
-    webhooks = await channel.webhooks()
-    hook = None
-    try:
-        hook = next(x for x in webhooks if str(x.user.id) == str(client.user.id))
-    except StopIteration:
-        hook = await channel.create_webhook(name='SmileBASIC Source Bridge')
+    hook = await get_webhook(channel)
     if '\n' in content:
+        # the reason why we put this through a try statement is basically just to test
+        # if there is valid JSON on the first line, and if there is, then should PROBABLY
+        # remove first line
         try:
             msgdata = json.loads(content[:content.index('\n')])
             content = content[content.index('\n'):]
         except json.decoder.JSONDecodeError:
             pass
     try:
-        await hook.send(content, username=user['username'], avatar_url=get_sbs_avatar(user['avatar']))
+        msg = await hook.send(content, username=user['username'], avatar_url=get_sbs_avatar(user['avatar']), wait=True)
+        return msg.id
     except discord.errors.HTTPException:
         await channel.send('Sorry, a message couldn\'t make it through. Possibly due to a limitation in Discord\'s API.')
+        return None
 
 async def poll_messages(last_id):
     global sbs_id
@@ -82,24 +91,30 @@ async def poll_messages(last_id):
                 userlist = data['user']
                 for i in data['comment']:
                     pid = str(i['parentId'])
+                    content = i['content']
                     protect_self = ('discord_uid' in config) or (i['createUserId'] != sbs_id)
-                    if protect_self and (i['createDate'] == i['editDate']) and (i['deleted'] == False) and pid in channels.values():
-                        items = channels.items()
-                        for dis_channel, sbs_channel in items:
-                            if str(sbs_channel) == str(pid):
-                                await send_discord_message(dis_channel, i, userlist)
+                    if protect_self and pid in channels.values():
+                        if i['createDate'] != i['editDate']:
+                            pass
+                        elif (i['deleted'] == False):
+                            items = channels.items()
+                            for dis_channel, sbs_channel in items:
+                                if str(sbs_channel) == str(pid):
+                                    await send_discord_message(dis_channel, i, userlist)
                 return last_id
     except asyncio.exceptions.TimeoutError:
         return last_id
     except json.decoder.JSONDecodeError:
         return last_id
 
-async def send_to_sbs(channel, content, user_token, avatar=None):
+async def send_to_sbs(channel, content, user_token, avatar=None, username=None):
     settings = {
-        'm': '12y'
+        'm': '12y',
     }
     if avatar:
         settings['a'] = int(avatar)
+    if username:
+        settings['b'] = str(username)
     message = {
         'parentId': int(channel),
         'content': json.dumps(settings)+'\n'+content
@@ -123,18 +138,18 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-    elif message.content.startswith('$bindchat'):
+    elif message.content.startswith('$bindchat') and not isinstance(message.channel, discord.channel.DMChannel):
         args = message.content.split(' ')
         if len(args) == 2:
             channels[str(message.channel.id)] = str(args[1])
             await message.channel.send('Successfully bound channel!')
-    elif (not 'discord_uid' in config) and message.content.startswith('$binduser'):
+    elif config['allow_userbinds'] and (not 'discord_uid' in config) and message.content.startswith('$binduser'):
         args = message.content.split(' ')
         await message.delete()
         if len(args) == 2:
             users[str(message.author.id)] = str(args[1])
             await message.author.send('Successfully bound user!')
-    elif (str(message.channel.id) in channels.keys()):
+    elif config['allow_discord_messages'] and (str(message.channel.id) in channels.keys()):
         content = message.content
         for i in message.attachments:
             content += '\n!' + i.url
@@ -149,18 +164,19 @@ async def on_message(message):
         else:
             webhooks = await message.channel.webhooks()
             async def send_anon_message():
-                if not (str(message.author.id) in avatars.keys()):
+                author = client.get_user(message.author.id)
+                if not (str(author.id) in avatars.keys()) or avatars[str(author.id)][0] != str(author.avatar_url):
                     headers = {'Authorization': 'Bearer ' + config['sbs_token']}
-                    r = requests.get(message.author.avatar_url)
-                    filename='img/'+str(message.author.id)+'.'
+                    r = requests.get(author.avatar_url)
+                    filename='img/'+str(author.id)+'.'
                     with open(filename+'webp', 'wb') as f:
                         f.write(r.content)
                     img = Image.open(filename+'webp').convert('RGB')
                     img.save(filename+'png', 'png')
                     f = {'file': open(filename+'png', 'rb')}
                     data = requests.post(config['api_url'] + 'File', headers=headers, files=f).text
-                    avatars[str(message.author.id)] = str(json.loads(data)['id'])
-                await send_to_sbs(channels[str(message.channel.id)], "<" + message.author.name + "> " + content, config['sbs_token'], avatars[str(message.author.id)])
+                    avatars[str(author.id)] = [str(author.avatar_url), str(json.loads(data)['id'])]
+                await send_to_sbs(channels[str(message.channel.id)], "<" + author.display_name + "> " + content, config['sbs_token'], avatars[str(author.id)][1], author.display_name)
             try:
                 hook = next(x for x in webhooks if str(x.user.id) == str(client.user.id))
                 if not (hook.id == message.author.id):
