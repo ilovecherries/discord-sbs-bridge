@@ -2,18 +2,6 @@ import discord, json, aiohttp, asyncio, requests
 import sbs2
 from PIL import Image
 
-config = {
-    'discord_token': '',
-    'sbs_token': '',
-    # 'discord_uid': '[PUT DISCORD USER ID IN HERE FOR SINGLE USER MODE]',
-    'allow_userbinds': False,
-    'allow_discord_messages': True,
-    # alternative to using sbs token
-    'username': '',
-    'password': '',
-    'save_location': 'save.json'
-}
-
 class DiscordBridge(discord.Client):
     """Discord bot that is bridge between Discord and SmileBASIC Source"""
     def __init__(self, conf):
@@ -45,7 +33,7 @@ class DiscordBridge(discord.Client):
                 content_id = self.channels[message.channel.id]
                 content = f'<{message.author.display_name}> {content}'
                 try:
-                    hook = next(x for x in message.channel.webhooks()
+                    hook = next(x for x in await message.channel.webhooks()
                                 if x.user.id == self.user.id)
                     if not hook.id == message.author.id:
                         await self.sbs2.send_message(content_id, content)
