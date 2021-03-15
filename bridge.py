@@ -44,7 +44,13 @@ class DiscordBridge(discord.Client):
                 # author = self.get_user(message.author.id) 
                 content_id = self.channels[message.channel.id]
                 content = f'<{message.author.display_name}> {content}'
-                await self.sbs2.send_message(content_id, content)
+                try:
+                    hook = next(x for x in message.channel.webhooks()
+                                if x.user.id == self.user.id)
+                    if not hook.id == message.author.id:
+                        await self.sbs2.send_message(content_id, content)
+                except StopIteration: 
+                    await self.sbs2.send_message(content_id, content)
 
     def load(self):
         """Loads data for the bot"""
