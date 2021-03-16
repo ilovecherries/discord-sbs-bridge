@@ -21,23 +21,23 @@ class DiscordBridge(discord.Client):
             if message.content.startswith('$bindchat'):
                 args = message.content.split()
                 if len(args) == 2:
-                    self.channels[message.channel.id] = str(args[1])
+                    self.channels[str(message.channel.id)] = str(args[1])
                     await message.channel.send('Successfully bound channel!')
-            elif message.channel.id in self.channels.keys():
+            elif str(message.channel.id) in self.channels.keys():
                 content = message.content
                 # adds attachments as links so you can view them in
                 # SmileBASIC Source
                 for i in message.attachments:
                     content += f'\n!{i.url}'
-                # author = self.get_user(message.author.id) 
-                content_id = self.channels[message.channel.id]
+                # author = self.get_user(message.author.id)
+                content_id = int(self.channels[str(message.channel.id)])
                 content = f'<{message.author.display_name}> {content}'
                 try:
                     hook = next(x for x in await message.channel.webhooks()
                                 if x.user.id == self.user.id)
                     if not hook.id == message.author.id:
                         await self.sbs2.send_message(content_id, content)
-                except StopIteration: 
+                except StopIteration:
                     await self.sbs2.send_message(content_id, content)
 
     def load(self):
@@ -61,6 +61,7 @@ class DiscordBridge(discord.Client):
 
     def run(self):
         # create the bridge connection to SmileBASIC Source
+        self.load()
         self.sbs2.connect()
         self.loop.create_task(self.sbs2.longpoller.run_forever())
         self.loop.create_task(self.save_loop())
@@ -82,7 +83,7 @@ class DiscordBridge(discord.Client):
                 elif i['deleted'] is False:
                     for d_channel, s_channel in self.channels.items():
                         if str(s_channel) == str(pid):
-                            await self.send_discord_message(d_channel, i,
+                            await self.send_discord_message(int(d_channel), i,
                                                             userlist)
 
     async def get_webhook(self, channel):
