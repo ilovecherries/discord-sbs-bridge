@@ -1,6 +1,11 @@
-import discord, json, aiohttp, asyncio, requests
-import sbs2
+"""SmileBASIC Source-Discord Bridge"""
+
+import json
+import asyncio
+import discord
+import requests
 from PIL import Image
+import sbs2
 
 class DiscordBridge(discord.Client):
     """Discord bot that is bridge between Discord and SmileBASIC Source"""
@@ -75,7 +80,7 @@ class DiscordBridge(discord.Client):
         # create the bridge connection to SmileBASIC Source
         self.load()
         self.sbs2.connect()
-        self.loop.create_task(self.sbs2.longpoller.run_forever())
+        self.loop.create_task(self.sbs2.longpoller.run_forever(self))
         self.loop.create_task(self.save_loop())
         # connect to discord
         super().run(self.config['discord_token'])
@@ -86,8 +91,7 @@ class DiscordBridge(discord.Client):
         userlist = data['user']
         for i in data['comment']:
             pid = str(i['parentId'])
-            protect = ('discord_uid' in self.config)
-            protect = protect or (i['createUserId'] != self.sbs2.userid)
+            protect = i['createUserId'] != self.sbs2.userid
             if protect and pid in self.channels.values():
                 # ill take care of edited messages later
                 if i['createDate'] != i['editDate']:
@@ -95,7 +99,7 @@ class DiscordBridge(discord.Client):
                 elif i['deleted'] is False:
                     for d_channel, s_channel in self.channels.items():
                         if str(s_channel) == str(pid):
-                            await self.send_discord_message(int(d_channel), i,
+                            await self.send_discord_message(str(d_channel), i,
                                                             userlist)
 
     async def get_webhook(self, channel):
@@ -119,13 +123,13 @@ class DiscordBridge(discord.Client):
         # try to filter the JSON data out of the message
         if '\n' in content:
             try:
-                msgdata = json.loads(content[:content.index('\n')])
+                json.loads(content[:content.index('\n')])
                 content = content[content.index('\n'):]
             except json.decoder.JSONDecodeError:
                 pass
         try:
-            msg = await hook.send(content, username=user['username'],
-                                  avatar_url=avatar, wait=True)
+            await hook.send(content, username=user['username'],
+                            avatar_url=avatar, wait=True)
         except discord.errors.HTTPException:
             await channel.send('Sorry, a message didn\'t make it through. ' +
                                'This is likely due to Discord\'s API ' +
@@ -149,5 +153,8 @@ class DiscordBridge(discord.Client):
                                             str(json.loads(data)['id'])]
         return int(self.avatars[str(author.id)][1])
 
-client = DiscordBridge(config)
-client.run()
+if __name__ == "__main__":
+    with open('config.json', 'r') as file:
+        config = json.loads(file.read())
+        client = DiscordBridge(config)
+        client.run()

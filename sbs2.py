@@ -26,18 +26,22 @@ class SBS2MessageLongPoller:
             'reverse': True,
             'limit': 1
         }
-        # this is in case that the request times out
+        headers={'Authorization': f'Bearer {self.authtoken}'}
         data = {}
         result = requests.get(
             f'{self.api_url}Read/chain/?requests=comment-' +
             json.dumps(comments_settings, separators=(',', ':')) +
-            '&requests=user.0createUserId&content.0parentId'
+            '&requests=user.0createUserId&content.0parentId',
+            headers=headers
         )
         data = result.json()
         self.last_id = data['comment'][0]['id']
 
-    async def run_forever(self):
-        """Infinite event loop that will send data if successful"""
+    async def run_forever(self, client):
+        """Infinite event loop that will send data if successful
+           The CLIENT is a discord.py related thing and can be removed
+           for other applications that might use this wrapper."""
+        await client.wait_until_ready()
         headers={'Authorization': f'Bearer {self.authtoken}'}
         async with aiohttp.ClientSession(headers=headers) as session:
             while True:
