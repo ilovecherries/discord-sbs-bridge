@@ -13,6 +13,7 @@ class DiscordBridge(discord.Client):
             self.sbs2.authtoken = conf['sbs_token']
         self.config = conf
         self.channels = {}
+        self.avatars = {}
 
         @self.event
         async def on_message(message):
@@ -23,6 +24,10 @@ class DiscordBridge(discord.Client):
                 if len(args) == 2:
                     self.channels[str(message.channel.id)] = str(args[1])
                     await message.channel.send('Successfully bound channel!')
+            elif message.content.startswith('$unbindchat'):
+                if self.channels[str(message.channel.id)]:
+                    del self.channels[str(message.channel.id)]
+                    await message.channel.send('Successfully unbound channel!')
             elif str(message.channel.id) in self.channels.keys():
                 content = message.content
                 # adds attachments as links so you can view them in
@@ -36,7 +41,12 @@ class DiscordBridge(discord.Client):
                     hook = next(x for x in await message.channel.webhooks()
                                 if x.user.id == self.user.id)
                     if not hook.id == message.author.id:
-                        await self.sbs2.send_message(content_id, content)
+                        settings = {
+                            'a': self.get_discord_avatar(message.author),
+                            'b': message.author.display_name
+                        }
+                        await self.sbs2.send_message(content_id, content,
+                                                     settings)
                 except StopIteration:
                     await self.sbs2.send_message(content_id, content)
 
@@ -46,6 +56,7 @@ class DiscordBridge(discord.Client):
             with open(self.config['save_location'], 'r') as save_file:
                 save_data = json.loads(save_file.read())
                 self.channels = save_data['channels']
+                self.avatars = save_data['avatars']
         except FileNotFoundError:
             return
 
@@ -56,6 +67,7 @@ class DiscordBridge(discord.Client):
             with open(self.config['save_location'], 'w') as save_file:
                 save_data = {
                     'channels': self.channels,
+                    'avatars': self.avatars
                 }
                 save_file.write(json.dumps(save_data))
 
@@ -74,7 +86,7 @@ class DiscordBridge(discord.Client):
         userlist = data['user']
         for i in data['comment']:
             pid = str(i['parentId'])
-            protect = ('discord_uid' in config)
+            protect = ('discord_uid' in self.config)
             protect = protect or (i['createUserId'] != self.sbs2.userid)
             if protect and pid in self.channels.values():
                 # ill take care of edited messages later
@@ -118,6 +130,24 @@ class DiscordBridge(discord.Client):
             await channel.send('Sorry, a message didn\'t make it through. ' +
                                'This is likely due to Discord\'s API ' +
                                'restrictions.')
+
+    def get_discord_avatar(self, author):
+        """Gets the SmileBASIC Source file ID for your Discord avatar"""
+        avatar_exists = str(author.id) in self.avatars.keys()
+        if not avatar_exists or self.avatars[str(author.id)][0] != author.avatar_url:
+            headers = {'Authorization': f'Bearer {self.sbs2.authtoken}'}
+            response = requests.get(author.avatar_url)
+            filename=f'img/{author.id}.'
+            with open(filename+'webp', 'wb') as file:
+                file.write(response.content)
+            img = Image.open(filename+'webp').convert('RGB')
+            img.save(filename+'png', 'png')
+            file = {'file': open(filename+'png', 'rb')}
+            data = requests.post(self.sbs2.api_url + 'File',
+                                 headers=headers, files=file).text
+            self.avatars[str(author.id)] = [str(author.avatar_url),
+                                            str(json.loads(data)['id'])]
+        return int(self.avatars[str(author.id)][1])
 
 client = DiscordBridge(config)
 client.run()
