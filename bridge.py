@@ -89,7 +89,10 @@ class DiscordBridge(discord.Client):
         """Called whenever a successful poll is made on SmileBASIC Source. We
            filter through the messages here and send them to Discord."""
         userlist = data['user']
-        for i in data['comment']:
+        # We limit it down to 5 messages per poll for in case the bot loses
+        # internet connection and starts spamming Discord with a bunch of
+        # messages
+        for i in data['comment'][-5:]:
             pid = str(i['parentId'])
             protect = i['createUserId'] != self.sbs2.userid
             if protect and pid in self.channels.values():
@@ -137,21 +140,24 @@ class DiscordBridge(discord.Client):
 
     def get_discord_avatar(self, author):
         """Gets the SmileBASIC Source file ID for your Discord avatar"""
-        avatar_exists = str(author.id) in self.avatars.keys()
-        if not avatar_exists:
-            if str(self.avatars[str(author.id)][0]) != str(author.avatar_url):
-                headers = {'Authorization': f'Bearer {self.sbs2.authtoken}'}
-                response = requests.get(author.avatar_url)
-                filename=f'img/{author.id}.'
-                with open(filename+'webp', 'wb') as file:
-                    file.write(response.content)
-                img = Image.open(filename+'webp').convert('RGB')
-                img.save(filename+'png', 'png')
-                file = {'file': open(filename+'png', 'rb')}
-                data = requests.post(self.sbs2.api_url + 'File',
-                                     headers=headers, files=file).text
-                self.avatars[str(author.id)] = [str(author.avatar_url),
-                                                str(json.loads(data)['id'])]
+        url = str(author.avatar_url)
+        aid = str(author.id)
+        doesnt_exist = str(author.id) not in self.avatars.keys()
+        doesnt_exist = doesnt_exist or str(self.avatars[aid][0]) != url
+
+        if doesnt_exist:
+            headers = {'Authorization': f'Bearer {self.sbs2.authtoken}'}
+            response = requests.get(author.avatar_url)
+            filename=f'img/{author.id}.'
+            with open(filename+'webp', 'wb') as file:
+                file.write(response.content)
+            img = Image.open(filename+'webp').convert('RGB')
+            img.save(filename+'png', 'png')
+            file = {'file': open(filename+'png', 'rb')}
+            data = requests.post(self.sbs2.api_url + 'File',
+                                 headers=headers, files=file).text
+            self.avatars[str(author.id)] = [str(author.avatar_url),
+                                            str(json.loads(data)['id'])]
         return int(self.avatars[str(author.id)][1])
 
 if __name__ == "__main__":
