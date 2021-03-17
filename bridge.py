@@ -138,19 +138,20 @@ class DiscordBridge(discord.Client):
     def get_discord_avatar(self, author):
         """Gets the SmileBASIC Source file ID for your Discord avatar"""
         avatar_exists = str(author.id) in self.avatars.keys()
-        if not avatar_exists or self.avatars[str(author.id)][0] != author.avatar_url:
-            headers = {'Authorization': f'Bearer {self.sbs2.authtoken}'}
-            response = requests.get(author.avatar_url)
-            filename=f'img/{author.id}.'
-            with open(filename+'webp', 'wb') as file:
-                file.write(response.content)
-            img = Image.open(filename+'webp').convert('RGB')
-            img.save(filename+'png', 'png')
-            file = {'file': open(filename+'png', 'rb')}
-            data = requests.post(self.sbs2.api_url + 'File',
-                                 headers=headers, files=file).text
-            self.avatars[str(author.id)] = [str(author.avatar_url),
-                                            str(json.loads(data)['id'])]
+        if not avatar_exists:
+            if str(self.avatars[str(author.id)][0]) != str(author.avatar_url):
+                headers = {'Authorization': f'Bearer {self.sbs2.authtoken}'}
+                response = requests.get(author.avatar_url)
+                filename=f'img/{author.id}.'
+                with open(filename+'webp', 'wb') as file:
+                    file.write(response.content)
+                img = Image.open(filename+'webp').convert('RGB')
+                img.save(filename+'png', 'png')
+                file = {'file': open(filename+'png', 'rb')}
+                data = requests.post(self.sbs2.api_url + 'File',
+                                     headers=headers, files=file).text
+                self.avatars[str(author.id)] = [str(author.avatar_url),
+                                                str(json.loads(data)['id'])]
         return int(self.avatars[str(author.id)][1])
 
 if __name__ == "__main__":
