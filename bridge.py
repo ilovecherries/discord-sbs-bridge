@@ -6,6 +6,7 @@ import discord
 import requests
 from PIL import Image
 import sbs2
+import os
 
 class DiscordBridge(discord.Client):
     """Discord bot that is bridge between Discord and SmileBASIC Source"""
@@ -58,7 +59,8 @@ class DiscordBridge(discord.Client):
     def load(self):
         """Loads data for the bot"""
         try:
-            with open(self.config['save_location'], 'r') as save_file:
+            with open(os.path.abspath(os.getcwd) +
+                      self.config['save_location'], 'r') as save_file:
                 save_data = json.loads(save_file.read())
                 self.channels = save_data['channels']
                 self.avatars = save_data['avatars']
@@ -161,7 +163,7 @@ class DiscordBridge(discord.Client):
         return int(self.avatars[str(author.id)][1])
 
 if __name__ == "__main__":
-    with open('config.json', 'r') as file:
+    with open(os.path.abspath(os.getcwd) + '/config.json', 'r') as file:
         config = json.loads(file.read())
         client = DiscordBridge(config)
         client.run()
