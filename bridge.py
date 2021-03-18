@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """SmileBASIC Source-Discord Bridge"""
 
 import json
@@ -59,7 +61,7 @@ class DiscordBridge(discord.Client):
     def load(self):
         """Loads data for the bot"""
         try:
-            with open(os.path.abspath(os.getcwd) +
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' +
                       self.config['save_location'], 'r') as save_file:
                 save_data = json.loads(save_file.read())
                 self.channels = save_data['channels']
@@ -71,7 +73,8 @@ class DiscordBridge(discord.Client):
         """Infinite loop for saving the bot's data"""
         while True:
             await asyncio.sleep(30)
-            with open(self.config['save_location'], 'w') as save_file:
+            with open(os.path.dirname(os.path.abspath(__file__)) + '/' +
+                      self.config['save_location'], 'w') as save_file:
                 save_data = {
                     'channels': self.channels,
                     'avatars': self.avatars
@@ -150,7 +153,11 @@ class DiscordBridge(discord.Client):
         if doesnt_exist:
             headers = {'Authorization': f'Bearer {self.sbs2.authtoken}'}
             response = requests.get(author.avatar_url)
-            filename=f'img/{author.id}.'
+            imgdir = os.path.dirname(os.path.abspath(__file__))
+            imgdir += '/img'
+            filename=f'{imgdir}{author.id}.'
+            if not os.path.exists(imgdir):
+                os.mkdir(imgdir)
             with open(filename+'webp', 'wb') as file:
                 file.write(response.content)
             img = Image.open(filename+'webp').convert('RGB')
@@ -163,7 +170,8 @@ class DiscordBridge(discord.Client):
         return int(self.avatars[str(author.id)][1])
 
 if __name__ == "__main__":
-    with open(os.path.abspath(os.getcwd) + '/config.json', 'r') as file:
+    with open(os.path.dirname(os.path.abspath(__file__)) +
+              '/config.json', 'r') as file:
         config = json.loads(file.read())
         client = DiscordBridge(config)
         client.run()

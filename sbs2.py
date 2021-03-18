@@ -58,7 +58,7 @@ class SBS2MessageLongPoller:
                         data = json.loads(await response.text())
                         self.last_id = data['lastId']
                         await self.callback(data['chains'])
-                except asyncio.exceptions.TimeoutError:
+                except asyncio.TimeoutError:
                     continue
                 except json.decoder.JSONDecodeError:
                     continue
