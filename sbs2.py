@@ -114,7 +114,7 @@ class SBS2:
         }
         message={
             'parentId': int(room_id),
-            'content': json.dumps(settings)+'\n'+content
+            'content': json.dumps(settings)+'\n{'+content+'}'
         }
         url = f'{self.api_url}Comment'
         async with aiohttp.ClientSession(headers=headers) as session:
