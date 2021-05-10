@@ -10,8 +10,10 @@ from PIL import Image
 import sbs2
 import os
 
+
 class DiscordBridge(discord.Client):
     """Discord bot that is bridge between Discord and SmileBASIC Source"""
+
     def __init__(self, conf):
         super().__init__()
         self.sbs2 = sbs2.SBS2(self.on_sbs_poll)
@@ -37,7 +39,7 @@ class DiscordBridge(discord.Client):
                     del self.channels[str(message.channel.id)]
                     await message.channel.send('Successfully unbound channel!')
             elif str(message.channel.id) in self.channels.keys():
-                content = message.content
+                content = '{'+message.content+'}'
                 # adds attachments as links so you can view them in
                 # SmileBASIC Source
                 for i in message.attachments:
@@ -87,6 +89,8 @@ class DiscordBridge(discord.Client):
         self.sbs2.connect()
         self.loop.create_task(self.sbs2.longpoller.run_forever(self))
         self.loop.create_task(self.save_loop())
+        # send a message in the console confirming that it is connected
+        print('Running!')
         # connect to discord
         super().run(self.config['discord_token'])
 
@@ -155,7 +159,7 @@ class DiscordBridge(discord.Client):
             response = requests.get(author.avatar_url)
             imgdir = os.path.dirname(os.path.abspath(__file__))
             imgdir += '/img'
-            filename=f'{imgdir}{author.id}.'
+            filename = f'{imgdir}{author.id}.'
             if not os.path.exists(imgdir):
                 os.mkdir(imgdir)
             with open(filename+'webp', 'wb') as file:
@@ -168,6 +172,7 @@ class DiscordBridge(discord.Client):
             self.avatars[str(author.id)] = [str(author.avatar_url),
                                             str(json.loads(data)['id'])]
         return int(self.avatars[str(author.id)][1])
+
 
 if __name__ == "__main__":
     with open(os.path.dirname(os.path.abspath(__file__)) +
