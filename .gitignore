@@ -126,3 +126,6 @@ dmypy.json
 
 img/
 save.json
+
+*.webp
+*.png
