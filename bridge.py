@@ -39,7 +39,10 @@ class DiscordBridge(discord.Client):
                     del self.channels[str(message.channel.id)]
                     await message.channel.send('Successfully unbound channel!')
             elif str(message.channel.id) in self.channels.keys():
-                content = '{'+message.content+'}'
+                # webhooks are something special and will circumvent
+                # perms to be able to ping people XD
+                content = message.content.replace('@', '@\u200b')
+                content = '{' + content + '}'
                 # adds attachments as links so you can view them in
                 # SmileBASIC Source
                 for i in message.attachments:
