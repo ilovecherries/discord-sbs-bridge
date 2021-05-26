@@ -41,8 +41,7 @@ class DiscordBridge(discord.Client):
             elif str(message.channel.id) in self.channels.keys():
                 # webhooks are something special and will circumvent
                 # perms to be able to ping people XD
-                content = message.content.replace('@', '@\u200b')
-                content = '{' + content + '}'
+                content = '{' + message.content + '}'
                 # adds attachments as links so you can view them in
                 # SmileBASIC Source
                 for i in message.attachments:
@@ -143,6 +142,7 @@ class DiscordBridge(discord.Client):
             except json.decoder.JSONDecodeError:
                 pass
         try:
+            content = content.replace('@', '@\u200b')
             await hook.send(content, username=user['username'],
                             avatar_url=avatar, wait=True)
         except discord.errors.HTTPException:
