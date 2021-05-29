@@ -107,7 +107,6 @@ class SBS2:
     async def send_message(self, room_id, content, settings=None):
         """Sends a message to SmileBASIC Source given the room ID and content"""
         settings = settings or {}
-        settings.update({'m': '12y'})
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {self.authtoken}'

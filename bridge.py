@@ -48,14 +48,14 @@ class DiscordBridge(discord.Client):
                     content += f'\n!{i.url}'
                 # author = self.get_user(message.author.id)
                 content_id = int(self.channels[str(message.channel.id)])
-                content = f'<{message.author.display_name}> {content}'
                 try:
                     hook = next(x for x in await message.channel.webhooks()
                                 if x.user.id == self.user.id)
                     if not hook.id == message.author.id:
                         settings = {
                             'a': self.get_discord_avatar(message.author),
-                            'b': message.author.display_name
+                            'b': message.author.display_name,
+                            'm': 'discord'
                         }
                         await self.sbs2.send_message(content_id, content,
                                                      settings)
