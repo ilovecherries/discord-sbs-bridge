@@ -48,7 +48,6 @@ class DiscordBridge(discord.Client):
                     content += f'\n!{i.url}'
                 # author = self.get_user(message.author.id)
                 content_id = int(self.channels[str(message.channel.id)])
-                content = f'<{message.author.display_name}> {content}'
                 try:
                     hook = next(x for x in await message.channel.webhooks()
                                 if x.user.id == self.user.id)
