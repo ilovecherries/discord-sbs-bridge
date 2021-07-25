@@ -41,7 +41,7 @@ class DiscordBridge(discord.Client):
             elif str(message.channel.id) in self.channels.keys():
                 # webhooks are something special and will circumvent
                 # perms to be able to ping people XD
-                content = '{' + message.content + '}'
+                content = message.content
                 # adds attachments as links so you can view them in
                 # SmileBASIC Source
                 for i in message.attachments:
