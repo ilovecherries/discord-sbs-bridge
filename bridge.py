@@ -82,7 +82,7 @@ class DiscordBridge(discord.Client):
                     content += f'\n!{i.url}'
                 # author = self.get_user(message.author.id)
                 content_id = int(self.channels[str(message.channel.id)])
-                send_id = -1
+                sent_id = -1
                 try:
                     hook = next(x for x in await message.channel.webhooks()
                                 if x.user.id == self.user.id)
@@ -126,7 +126,7 @@ class DiscordBridge(discord.Client):
         # create the bridge connection to SmileBASIC Source
         self.load()
         self.sbs2.connect()
-        self.loop.create_task(self.sbs2.longpoller.run_forever(self))
+        self.loop.create_task(self.sbs2.run_forever(self))
         self.loop.create_task(self.save_loop())
         # send a message in the console confirming that it is connected
         print('Running!')
