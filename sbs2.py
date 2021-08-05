@@ -13,13 +13,16 @@ class SBS2:
        to the main asyncio loop. If you do not already have one, read here
        on how to make one:
        https://www.aeracode.org/2018/02/19/python-async-simplified/"""
-    def __init__(self, on_successful_pull, authtoken=''):
+    def __init__(self, on_successful_pull, authtoken='', username='',
+                 password=''):
         self.api_url = 'https://smilebasicsource.com/api/'
         self.userid = 0
         self.authtoken = authtoken
         self.longpoller = None
         self.on_successful_pull = on_successful_pull
         self.loop = asyncio.new_event_loop()
+        self.username = username
+        self.password = password
         self.last_id = -1
 
     async def run_forever(self, client):
@@ -28,6 +31,7 @@ class SBS2:
            for other applications that might use this wrapper."""
         await client.wait_until_ready()
         headers={'Authorization': f'Bearer {self.authtoken}'}
+        rate_limited = False
         async with aiohttp.ClientSession(headers=headers) as session:
             while True:
                 listener_settings = {
@@ -38,21 +42,33 @@ class SBS2:
                 url = f"{self.api_url}Read/listen?actions="
                 url += json.dumps(listener_settings, separators=(',', ':'))
 
+                if rate_limited:
+                    await asyncio.sleep(3)
+                    rate_limited = False
+
                 try:
                     async with session.get(url) as response:
+                        status = response.status
                         data = json.loads(await response.text())
-                        self.last_id = data['lastId']
-                        await self.on_successful_pull(data['chains'])
+                        if status == 200:
+                            self.last_id = data['lastId']
+                            await self.on_successful_pull(data['chains'])
+                        elif status == 401: # invalid auth
+                            print('attempting to refresh auth')
+                            self.login()
+                        elif status == 429: # ratelimited
+                            print('rate limited')
+                            rate_limited = True
+
                 except Exception as e:
                     continue
 
-
-    def login(self, username, password):
+    def login(self):
         """Gets the auth token from the API and saves it"""
         result = requests.post(self.api_url + 'User/authenticate',
             json={
-                'username': username,
-                'password': password
+                'username': self.username,
+                'password': self.password
             }
         )
 
@@ -61,7 +77,7 @@ class SBS2:
     def connect(self):
         """Starts polling from website in infinite loop"""
         if not self.authtoken:
-            raise Exception()
+            self.login()
 
         # for self-identification
         selfuser = requests.get(

@@ -17,11 +17,7 @@ class DiscordBridge(discord.Client):
 
     def __init__(self, conf):
         super().__init__()
-        self.sbs2 = sbs2.SBS2(self.on_sbs_poll)
-        if conf['sbs_token'] == '':
-            self.sbs2.login(conf['username'], conf['password'])
-        else:
-            self.sbs2.authtoken = conf['sbs_token']
+        self.sbs2 = sbs2.SBS2(self.on_sbs_poll, '', conf['username'], conf['password'])
         self.config = conf
         self.channels = {}
         self.avatars = {}
@@ -107,6 +103,8 @@ class DiscordBridge(discord.Client):
                 save_data = json.loads(save_file.read())
                 self.channels = save_data['channels']
                 self.avatars = save_data['avatars']
+                if 'authtoken' in save_data:
+                    self.sbs2.authtoken = save_data['authtoken']
         except FileNotFoundError:
             return
 
@@ -118,7 +116,8 @@ class DiscordBridge(discord.Client):
                       self.config['save_location'], 'w') as save_file:
                 save_data = {
                     'channels': self.channels,
-                    'avatars': self.avatars
+                    'avatars': self.avatars,
+                    'authtoken': self.sbs2.authtoken
                 }
                 save_file.write(json.dumps(save_data))
 
