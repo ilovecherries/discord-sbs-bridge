@@ -7,9 +7,10 @@ import asyncio
 import discord
 import requests
 from PIL import Image
+from collections import OrderedDict
 import sbs2
 import os
-
+from lru import LRU
 
 class DiscordBridge(discord.Client):
     """Discord bot that is bridge between Discord and SmileBASIC Source"""
@@ -24,6 +25,10 @@ class DiscordBridge(discord.Client):
         self.config = conf
         self.channels = {}
         self.avatars = {}
+        # save messages from sbs to discord
+        self.sbs_msgs = LRU(1000)
+        # TODO: save messages from discord to sbs
+        self.dis_msgs = LRU(1000)
 
         @self.event
         async def on_message(message):
@@ -105,15 +110,35 @@ class DiscordBridge(discord.Client):
         for i in data['comment'][-5:]:
             pid = str(i['parentId'])
             protect = i['createUserId'] != self.sbs2.userid
-            if protect and pid in self.channels.values():
-                # ill take care of edited messages later
-                if i['createDate'] != i['editDate']:
+            mid = i['id']
+            content = i['content']
+            settings = {}
+            # try to filter the JSON data out of the message
+            if '\n' in content:
+                try:
+                    settings = json.loads(content[:content.index('\n')])
+                    content = content[content.index('\n'):]
+                except json.decoder.JSONDecodeError:
                     pass
+            i['content'] = content
+            if protect and pid in self.channels.values():
+                if i['deleted'] is True:
+                    try:
+                        if self.sbs_msgs.has_key(mid):
+                            await self.sbs_msgs[mid].delete()
+                    except Exception as e:
+                        pass
+                elif i['createDate'] != i['editDate']:
+                    try:
+                        if self.sbs_msgs.has_key(mid):
+                            await self.sbs_msgs[mid].edit(content=i['content'])
+                    except Exception as e:
+                        pass
                 elif i['deleted'] is False:
                     for d_channel, s_channel in self.channels.items():
                         if str(s_channel) == str(pid):
                             await self.send_discord_message(str(d_channel), i,
-                                                            userlist)
+                                                            settings, userlist)
 
     async def get_webhook(self, channel):
         """Generates or gets a webhook from a channel in order to use as
@@ -125,7 +150,7 @@ class DiscordBridge(discord.Client):
         except StopIteration:
             return await channel.create_webhook(name='SmileBASIC Source Bridge')
 
-    async def send_discord_message(self, channel_id, comment, userlist):
+    async def send_discord_message(self, channel_id, comment, settings, userlist):
         """Sends a message to Discord given the content provided"""
         user = next(user for user in userlist
                     if user['id'] == comment['createUserId'])
@@ -133,17 +158,11 @@ class DiscordBridge(discord.Client):
         channel = self.get_channel(int(channel_id))
         avatar = self.sbs2.get_avatar(user['avatar'], 128)
         hook = await self.get_webhook(channel)
-        # try to filter the JSON data out of the message
-        if '\n' in content:
-            try:
-                json.loads(content[:content.index('\n')])
-                content = content[content.index('\n'):]
-            except json.decoder.JSONDecodeError:
-                pass
         try:
             content = content.replace('@', '@\u200b')
-            await hook.send(content, username=user['username'],
+            msg = await hook.send(content, username=user['username'],
                             avatar_url=avatar, wait=True)
+            self.sbs_msgs[comment['id']] = msg
         except discord.errors.HTTPException:
             await channel.send('Sorry, a message didn\'t make it through. ' +
                                'This is likely due to Discord\'s API ' +
