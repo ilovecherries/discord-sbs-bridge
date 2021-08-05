@@ -6,22 +6,86 @@ import aiohttp
 import simplejson
 import requests
 
-class SBS2MessageLongPoller:
-    """
-    Creates a message long poller that infinitely loops forever until it is
-    destroyed. It will initially poll for one message for the first ID, then
-    use it in order to infinitely keep polling for messages.
-    In order to use it correctly, I would recommend doing the following steps:
-    1. Instantiating a LongPoller object for your client instance.
-    2. Create a new Thread and then set the target to the run_forever()
-       function
-    """
-    def __init__(self, api_url, callback, authtoken):
-        self.api_url = api_url
-        self.callback = callback
+class SBS2:
+    """Client representing connection to SmileBASIC Source 2
+       Once connected with connect(), you'll want to add 
+       sbs2.longpoller.run_forever()
+       to the main asyncio loop. If you do not already have one, read here
+       on how to make one:
+       https://www.aeracode.org/2018/02/19/python-async-simplified/"""
+    def __init__(self, on_successful_pull, authtoken='', username='',
+                 password=''):
+        self.api_url = 'https://smilebasicsource.com/api/'
+        self.userid = 0
         self.authtoken = authtoken
+        self.longpoller = None
+        self.on_successful_pull = on_successful_pull
         self.loop = asyncio.new_event_loop()
-        # create an initial poll in order to get the last ID sent
+        self.username = username
+        self.password = password
+        self.last_id = -1
+
+    async def run_forever(self, client):
+        """Infinite event loop that will send data if successful
+           The CLIENT is a discord.py related thing and can be removed
+           for other applications that might use this wrapper."""
+        await client.wait_until_ready()
+        headers={'Authorization': f'Bearer {self.authtoken}'}
+        rate_limited = False
+        async with aiohttp.ClientSession(headers=headers) as session:
+            while True:
+                listener_settings = {
+                    'lastId': self.last_id,
+                    'chains': ['comment.0id', 'user.1createUserId',
+                               'content.1parentId']
+                }
+                url = f"{self.api_url}Read/listen?actions="
+                url += json.dumps(listener_settings, separators=(',', ':'))
+
+                if rate_limited:
+                    await asyncio.sleep(3)
+                    rate_limited = False
+
+                try:
+                    async with session.get(url) as response:
+                        status = response.status
+                        data = json.loads(await response.text())
+                        if status == 200:
+                            self.last_id = data['lastId']
+                            await self.on_successful_pull(data['chains'])
+                        elif status == 401: # invalid auth
+                            print('attempting to refresh auth')
+                            self.login()
+                        elif status == 429: # ratelimited
+                            print('rate limited')
+                            rate_limited = True
+
+                except Exception as e:
+                    continue
+
+    def login(self):
+        """Gets the auth token from the API and saves it"""
+        result = requests.post(self.api_url + 'User/authenticate',
+            json={
+                'username': self.username,
+                'password': self.password
+            }
+        )
+
+        self.authtoken = result.text
+
+    def connect(self):
+        """Starts polling from website in infinite loop"""
+        if not self.authtoken:
+            self.login()
+
+        # for self-identification
+        selfuser = requests.get(
+            f'{self.api_url}User/me',
+            headers={'Authorization': f'Bearer {self.authtoken}'}
+        ).json()
+        self.userid = selfuser['id']
+
         comments_settings = {
             'reverse': True,
             'limit': 1
@@ -36,73 +100,7 @@ class SBS2MessageLongPoller:
         )
         data = result.json()
         self.last_id = data['comment'][0]['id']
-
-    async def run_forever(self, client):
-        """Infinite event loop that will send data if successful
-           The CLIENT is a discord.py related thing and can be removed
-           for other applications that might use this wrapper."""
-        await client.wait_until_ready()
-        headers={'Authorization': f'Bearer {self.authtoken}'}
-        async with aiohttp.ClientSession(headers=headers) as session:
-            while True:
-                listener_settings = {
-                    'lastId': self.last_id,
-                    'chains': ['comment.0id', 'user.1createUserId',
-                               'content.1parentId']
-                }
-                url = f"{self.api_url}Read/listen?actions="
-                url += json.dumps(listener_settings, separators=(',', ':'))
-
-                try:
-                    async with session.get(url) as response:
-                        data = json.loads(await response.text())
-                        self.last_id = data['lastId']
-                        await self.callback(data['chains'])
-                except Exception as e:
-                    continue
-
-class SBS2:
-    """Client representing connection to SmileBASIC Source 2
-       Once connected with connect(), you'll want to add 
-       sbs2.longpoller.run_forever()
-       to the main asyncio loop. If you do not already have one, read here
-       on how to make one:
-       https://www.aeracode.org/2018/02/19/python-async-simplified/"""
-    def __init__(self, on_successful_pull, authtoken=''):
-        self.api_url = 'https://smilebasicsource.com/api/'
-        self.userid = 0
-        self.authtoken = authtoken
-        self.longpoller = None
-        self.on_successful_pull = on_successful_pull
-
-    def login(self, username, password):
-        """Gets the auth token from the API and saves it"""
-        result = requests.post(self.api_url + 'User/authenticate',
-            json={
-                'username': username,
-                'password': password
-            }
-        )
-
-        self.authtoken = result.text
-
-    def connect(self):
-        """Starts polling from website in infinite loop"""
-        if not self.authtoken:
-            raise Exception()
-
-        # for self-identification
-        selfuser = requests.get(
-            f'{self.api_url}User/me',
-            headers={'Authorization': f'Bearer {self.authtoken}'}
-        ).json()
-        self.userid = selfuser['id']
-
-        self.longpoller = SBS2MessageLongPoller(
-            self.api_url,
-            self.on_successful_pull,
-            self.authtoken
-        )
+        
 
     def get_headers(self):
         return {
