@@ -104,21 +104,45 @@ class SBS2:
             self.authtoken
         )
 
+    def get_headers(self):
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {self.authtoken}'
+        }
+
     async def send_message(self, room_id, content, settings=None):
         """Sends a message to SmileBASIC Source given the room ID and content"""
         settings = settings or {}
         settings.update({'m': '12y'})
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.authtoken}'
-        }
+        headers = self.get_headers()
         message={
             'parentId': int(room_id),
             'content': json.dumps(settings)+'\n'+content
         }
         url = f'{self.api_url}Comment'
         async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.post(url, data=json.dumps(message)):
+            async with session.post(url, data=json.dumps(message)) as response:
+                data = await response.json()
+                return data['id']
+
+    async def edit_message(self, message_id, content, settings=None):
+        settings = settings or {}
+        settings.update({'m': '12y'})
+        headers  = self.get_headers()
+        message={
+            'content': json.dumps(settings)+'\n'+content
+        }
+        url = f'{self.api_url}Comment/{message_id}'
+
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.put(url, data=json.dumps(message)):
+                return
+
+    async def delete_message(self, message_id):
+        headers  = self.get_headers()
+        url = f'{self.api_url}Comment/{message_id}'
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.delete(url):
                 return
 
     def get_avatar(self, avatar_id, size):

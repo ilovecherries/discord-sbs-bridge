@@ -31,6 +31,35 @@ class DiscordBridge(discord.Client):
         self.dis_msgs = LRU(1000)
 
         @self.event
+        async def on_message_edit(before, after):
+            if self.dis_msgs.has_key(before.id):
+                content = after.content
+                # adds attachments as links so you can view them in
+                # SmileBASIC Source
+                for i in after.attachments:
+                    content += f'\n!{i.url}'
+                # author = self.get_user(message.author.id)
+                message_id = self.dis_msgs[before.id]
+                try:
+                    hook = next(x for x in await after.channel.webhooks()
+                                if x.user.id == self.user.id)
+                    if not hook.id == after.author.id:
+                        settings = {
+                            'a': self.get_discord_avatar(after.author),
+                            'b': after.author.display_name
+                        }
+                        await self.sbs2.edit_message(message_id,
+                                                               content,
+                                                               settings)
+                except StopIteration:
+                    await self.sbs2.edit_message(message_id, content)
+
+        @self.event
+        async def on_message_delete(message):
+            if self.dis_msgs.has_key(message.id):
+                await self.sbs2.delete_message(self.dis_msgs[message.id])
+
+        @self.event
         async def on_message(message):
             if message.author == self.user:
                 return
@@ -53,6 +82,7 @@ class DiscordBridge(discord.Client):
                     content += f'\n!{i.url}'
                 # author = self.get_user(message.author.id)
                 content_id = int(self.channels[str(message.channel.id)])
+                send_id = -1
                 try:
                     hook = next(x for x in await message.channel.webhooks()
                                 if x.user.id == self.user.id)
@@ -61,10 +91,13 @@ class DiscordBridge(discord.Client):
                             'a': self.get_discord_avatar(message.author),
                             'b': message.author.display_name
                         }
-                        await self.sbs2.send_message(content_id, content,
-                                                     settings)
+                        sent_id = await self.sbs2.send_message(content_id,
+                                                               content,
+                                                               settings)
                 except StopIteration:
-                    await self.sbs2.send_message(content_id, content)
+                    sent_id = await self.sbs2.send_message(content_id, content)
+                if sent_id != -1:
+                    self.dis_msgs[message.id] = sent_id
 
     def load(self):
         """Loads data for the bot"""
