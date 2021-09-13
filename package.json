@@ -1,0 +1,26 @@
+{
+  "name": "discord-sbs-bridge",
+  "version": "1.0.0",
+  "description": "Discord SmileBASIC Source Bridge",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://git@mephistopheles.epochal.quest:2222/cherry/discord-sbs-bridge.git"
+  },
+  "keywords": [
+    "discord",
+    "sbs",
+    "bridge"
+  ],
+  "author": "Cherry",
+  "license": "WTFPL",
+  "dependencies": {
+    "@discordjs/builders": "^0.6.0",
+    "@discordjs/rest": "^0.1.0-canary.0",
+    "discord-api-types": "^0.23.1",
+    "discord.js": "^13.1.0"
+  }
+}
