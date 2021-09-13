@@ -38,13 +38,13 @@ export class CommandList {
     }
 
     toJSON() {
-        return Object.values(this.commands);
+        return Array.from(this.commands.values()).map(x => x.toJSON());
     }
 
     async interactionHandler(interaction: Interaction) {
         if (!interaction.isCommand()) return;
-
-        if (this.commands.hasOwnProperty(interaction.commandName)) {
+		
+        if (this.commands.has(interaction.commandName.toLowerCase())) {
             (async () => {
                 await this.commands
                     .get(interaction.commandName)
