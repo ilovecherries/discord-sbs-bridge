@@ -1,6 +1,5 @@
 import ContentAPI from './ContentAPI';
 import { User, UserData } from './User';
-import { isNode, isBrowser } from 'browser-or-node';
 import { SmileBASICSource } from '../sbs';
 import axios from 'axios';
 
@@ -28,7 +27,6 @@ export interface CommentData extends CommentToSend {
 }
 
 export class Comment implements CommentData {
-    private static readonly API_LINK = ContentAPI.API_LINK + "Comment";
     createDate: string;
     editDate: string;
     createUserId: number;
@@ -37,54 +35,39 @@ export class Comment implements CommentData {
     id: number;
     parentId: number;
     content: string;
-    createUser: User;
-    editUser: User;
+    createUser?: User;
+    editUser?: User;
     settings: CommentSettings;
     textContent: string;
 
     // sends comment data and returns the sent comment
     public static send(content: string, settings: CommentSettings, 
-                       pageId: number, authtoken: string): Promise<Comment> {
+                       pageId: number, authtoken: string, 
+                       apiURL: string): Promise<Comment> {
         const data: CommentToSend = {
             content: `${JSON.stringify(settings)}\n${content}`,
             parentId: pageId
         }
         const body = JSON.stringify(data);
         const headers = SmileBASICSource.generateHeaders(authtoken);
-        if (isBrowser) {
-            return fetch(Comment.API_LINK, {
-                    method: "POST",
-                    body,
-                    headers
-                })
-                .then(response => response.json())
-                .then(json => new Comment(json));
-        } else if (isNode) {
-            return axios.post(Comment.API_LINK, body, {headers}) 
-                .then(res => new Comment(res.data));
-        } else {
-            throw new Error("The API call was not made in either Node or the browser");
-        }
+        return axios.post(`${apiURL}Comment`, body, {headers}) 
+            .then(res => {
+                console.log(res.data)
+                return new Comment(res.data)
+            });
         
     }
 
     // get comment by ID
-    public static getByID(id: number): Promise<Comment> {
-        if (isBrowser) {
-            return fetch(`${Comment.API_LINK}?Ids=${id}`)
-                .then(response => response.json())
-                .then(json => (new Comment(json[0])));
-        } else if (isNode) {
-            return axios.get(`${Comment.API_LINK}?Ids=${id}`)
-                .then(response => (new Comment(response.data[0])));
-        } else {
-            throw new Error("The API call was not made in either Node or the browser");
-        }
+    public static getByID(id: number, apiURL: string): Promise<Comment> {
+        return axios.get(`${apiURL}Comment?Ids=${id}`)
+            .then(response => (new Comment(response.data[0])));
     }
 
     // get last sent comments in selected parentID with length LIMIT
     public static getWithLimit(limit: number, 
-        parentID: undefined | number = undefined): Promise<Array<Comment>> {
+        apiURL: string,
+        parentID: undefined | number = undefined,): Promise<Array<Comment>> {
         // TODO: Replace with Chainer dedicated class
         let settings: any = {
             'reverse': true,
@@ -92,25 +75,14 @@ export class Comment implements CommentData {
         };
         if (parentID)
             settings.parentIds = [parentID];
-        let url = `${ContentAPI.API_LINK}Read/chain/?requests=comment-${JSON.stringify(settings)}&requests=user.0createUserId&requests=user.0editUserId`;
+        let url = `${apiURL}Read/chain/?requests=comment-${JSON.stringify(settings)}&requests=user.0createUserId&requests=user.0editUserId`;
 
-        if (isBrowser) {
-            return fetch(url)
-                    .then(response => response.json())
-                    .then(json => {
-                        console.log(json);
-                        return json['comment']
-                            .filter((x: CommentData) => !x.deleted)
-                            .map((x: CommentData) => new Comment(x, json['user'])).reverse()
-                    });
-        } else if (isNode) {
-            return axios.get(url)
-                    .then(res => {
-                        return res.data['comment']
-                            .filter((x: CommentData) => !x.deleted)
-                            .map((x: CommentData) => new Comment(x, res.data['user'])).reverse()
-                    });
-        }
+        return axios.get(url)
+            .then(res => {
+                return res.data['comment']
+                    .filter((x: CommentData) => !x.deleted)
+                    .map((x: CommentData) => new Comment(x, res.data['user'])).reverse()
+            });
     }
 
     constructor(commentData: CommentData, userlist: UserData[]=[]) {
@@ -127,14 +99,10 @@ export class Comment implements CommentData {
         let createUserData = userlist.find(user => user.id === this.createUserId);
         if (createUserData !== undefined) 
             this.createUser = new User(createUserData)
-        else {
-            throw new Error('Cannot find create user ID in the userlist. Is this a malformed chain call?');
-        }
+
         let editUserData = userlist.find(user => user.id === this.editUserId);
         if (editUserData !== undefined) 
             this.editUser = new User(editUserData)
-        else
-            throw new Error('Cannot find create user ID in the userlist. Is this a malformed chain call?');
         // extract the settings from the text
         try {
             let firstNewline = this.content.indexOf('\n');
@@ -165,30 +133,15 @@ export class Comment implements CommentData {
         }
     }
 
-    edit(content: string, settings: CommentSettings, authtoken: string) {
+    edit(content: string, settings: CommentSettings, authtoken: string, apiURL: string) {
         this.content = `${JSON.stringify(settings)}\n${content}`;
         const body = JSON.stringify(this);
         const headers = SmileBASICSource.generateHeaders(authtoken);
-        if (isBrowser) {
-            fetch(`${Comment.API_LINK}/${this.id}`, {
-                method: 'PUT',
-                body,
-                headers
-            })
-        } else if (isNode) {
-            axios.put(`${Comment.API_LINK}/${this.id}`, body, {headers})
-        }
+        axios.put(`${apiURL}Comment/${this.id}`, body, {headers})
     }
 
-    delete(authtoken: string) {
+    delete(authtoken: string, apiURL: string) {
         const headers = SmileBASICSource.generateHeaders(authtoken);
-        if (isBrowser) {
-            fetch(`${Comment.API_LINK}/${this.id}`, {
-                method: 'DELETE',
-                headers
-            });
-        } else if (isNode) {
-            axios.delete(`${Comment.API_LINK}/${this.id}`, {headers});
-        }
+        axios.delete(`${apiURL}Comment/${this.id}`, {headers});
     }
 }

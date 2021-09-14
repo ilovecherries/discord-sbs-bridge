@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from '@discordjs/builders';
 import { CommandInteraction, Interaction, MessageComponentInteraction } from 'discord.js';
+import SBSBridgeBot from './bot';
 
 
 export class Command {
@@ -19,8 +20,8 @@ export class Command {
         return this.slashCommandData.name;
     }
 
-    async run(interaction: CommandInteraction) {
-        await this.func(interaction);
+    async run(interaction: CommandInteraction, client: SBSBridgeBot) {
+        await this.func(interaction, client);
     }
 }
 
@@ -48,7 +49,7 @@ export class CommandList {
             (async () => {
                 await this.commands
                     .get(interaction.commandName)
-                    ?.run(interaction);
+                    ?.run(interaction, interaction.client as SBSBridgeBot);
             })();
         }
     }

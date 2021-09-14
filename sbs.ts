@@ -1,18 +1,5 @@
 import axios from 'axios';
-import { Comment, CommentData } from './sbs/Comment';
-
-export class SBSMessage {
-	constructor(
-		public content: string,
-		public settings: any
-	) {}
-
-	toJSON() {
-		return {
-			'content': `${JSON.stringify(this.settings)}this.content`
-		}
-	}
-}
+import { Comment, CommentData, CommentSettings } from './sbs/Comment';
 
 export interface SBSLoginCredentials {
 	username: string;
@@ -21,7 +8,7 @@ export interface SBSLoginCredentials {
 
 export class SmileBASICSource {
 	/// The location of the API to make requests
-	private apiURL: string = 'https://smilebasicsource.com/api/';
+	apiURL: string = 'https://smilebasicsource.com/api/';
 
 	/// A function that is called whenever a pull is successful
 	private onSuccessfulPull: Function;
@@ -38,6 +25,9 @@ export class SmileBASICSource {
 
 	/// Store the timeout for the infinite loop
 	private loopTimeout?: ReturnType<typeof setTimeout>;
+
+	/// The self user for filtering out own requests
+	private userId: number = -1;
 
 	constructor(onSuccessfulPull: Function,
 				credentials: SBSLoginCredentials,
@@ -64,7 +54,7 @@ export class SmileBASICSource {
 			}
 		)
 			.then(res => res.data);
-	this.authtoken = token;
+		this.authtoken = token;
 	}
 
 	public static generateHeaders(authtoken: string): any {
@@ -101,7 +91,8 @@ export class SmileBASICSource {
 						this.lastID = res.data['lastId'];
 						const comments: Array<Comment> = res.data.chains.comment.map(
 							(c: CommentData) => new Comment(c, res.data.chains.user)
-						);
+						)
+						.filter((x: Comment) => x.createUserId !== this.userId);
 						await this.onSuccessfulPull(comments);
 						break;
 					case 401: // invalid auth
@@ -122,9 +113,19 @@ export class SmileBASICSource {
 		if (this.authtoken === "")
 			await this.login();
 
-		const lastComment = await Comment.getWithLimit(1);
+		// this is so we can filter our own messages
+		const headers = this.headers;
+		axios.get(`${this.apiURL}User/me`, {headers})
+			.then(x => this.userId = x.data['id']);
+
+		const lastComment = await Comment.getWithLimit(1, this.apiURL);
 		this.lastID = lastComment[0].id;
 
 		this.loopTimeout = setTimeout(this.runForever, 0);
+	}
+
+	async sendMessage(content: string, pageId: number,
+		settings: CommentSettings = {m: '12y'}) {
+		await Comment.send(content, settings, pageId, this.authtoken, this.apiURL);
 	}
 }

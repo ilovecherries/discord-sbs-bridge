@@ -1,18 +1,48 @@
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v9';
-import { Client, ClientOptions, Intents, Interaction, Message } from 'discord.js';
+import { Channel, Client, ClientOptions, GuildChannel, Intents, Interaction, Message, TextBasedChannels, TextChannel, Webhook } from 'discord.js';
 import { CommandList } from './command';
 import LOADED_COMMANDS from './commandList';
 import { SBSLoginCredentials, SmileBASICSource } from './sbs';
+import { Comment } from './sbs/Comment';
 
 class ChannelPair {
+	private discordChannelCached?: TextChannel;
+
     constructor(
         private discordChannelId: string,
         private sbsChannelId: number,
     ) {}
 
+	toJSON() {
+		return {
+			"discordChannelId": this.discordChannelId,
+			"sbsChannelId": this.sbsChannelId
+		}
+	}
+
     public get discord(): string {return this.discordChannelId}
     public set discord(newId: string) {this.discordChannelId = newId}
+
+	public discordChannel(client: Client): TextChannel {
+		if (this.discordChannelCached === undefined) {
+			this.discordChannelCached 
+				= client.channels.cache.get(this.discordChannelId) as TextChannel;
+		}
+		return this.discordChannelCached!;
+	}
+
+	public discordWebhook(client: Client): Promise<Webhook> {
+		return this.discordChannel(client).fetchWebhooks()
+			.then(webhooks => {
+				let w = webhooks.find((x: Webhook) => x.owner!.id === client.user!.id);
+				if (w === undefined) {
+					return this.discordChannel(client).createWebhook('SmileBASIC Source Bridge');
+				}
+				return w;
+			})
+	}
+
     public get sbs() {return this.sbsChannelId}
     public set sbs(newId: number) {this.sbsChannelId = newId}
 }
@@ -29,12 +59,13 @@ export default class SBSBridgeBot extends Client {
         super(options);
 
 		this.on('ready', this.onReady);
-        this.on('message', this.onMessage);
+        this.on('messageCreate', this.onMessage);
         this.on('interactionCreate', this.onInteractionCreate);
 		
 		this.commands = LOADED_COMMANDS;
 		this.restConnection = new REST({version: '9'}).setToken(token);
         this.channelList.push(new ChannelPair('774531326203527178', 937));
+        this.channelList.push(new ChannelPair('774536860374401025', 6661));
 
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
 		
@@ -69,15 +100,33 @@ export default class SBSBridgeBot extends Client {
     private onMessage = async (msg: Message) => {
         if (msg.author === this.user)
             return;
-        let channels = this.channelList.find(x => x.discord === msg.channelId);
-        if (channels === undefined) 
+        let channel = this.channelList.find(x => x.discord === msg.channelId);
+        if (channel === undefined) 
             return;
+		// filter it out if it's from the webhook
+		const webhook = await channel.discordWebhook(this);
+		if (webhook.id === msg.author!.id)
+			return;
         let content = msg.content + 
             msg.attachments.map(x => `!${x.url}`).join('\n');
+		const username = msg.member?.nickname || msg.author.username;
+		this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username})
     }
 
-	private onSuccessfulPull = async (chains: any) => {
-		console.log(chains);
+	private onSuccessfulPull = async (comments: Array<Comment>) => {
+		comments.map(c => {
+			c.textContent = c.textContent.replace('@', '@\u200b');
+			this.channelList
+				.filter(x => x.sbs === c.parentId)
+				.map(d => d.discordWebhook(this))
+				.map(w => w
+					.then(x => 
+						x.send({
+							'username': c.createUser?.username,
+							'avatarURL': c.createUser?.getAvatarLink(this.sbs.apiURL),
+							'content': c.textContent
+						})))
+		})		
 	}
 
 	private onInteractionCreate(interaction: Interaction) {

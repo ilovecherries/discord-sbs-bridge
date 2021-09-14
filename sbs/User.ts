@@ -32,7 +32,7 @@ export class User implements UserData {
         this.id = userData.id;
     }
 
-    getAvatarLink(size: number = 256): string {
-        return `${ContentAPI.API_LINK}File/raw/${this.avatar}?size=${size}&crop=true`
+    getAvatarLink(apiURL: string, size: number = 256): string {
+        return `${apiURL}File/raw/${this.avatar}?size=${size}&crop=true`
     }
 }
