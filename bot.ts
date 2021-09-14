@@ -2,7 +2,8 @@ import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v9';
 import { Client, ClientOptions, Intents, Interaction, Message } from 'discord.js';
 import { CommandList } from './command';
-import LOADED_COMMANDS from './commandList'
+import LOADED_COMMANDS from './commandList';
+import { SBSLoginCredentials, SmileBASICSource } from './sbs';
 
 class ChannelPair {
     constructor(
@@ -20,18 +21,23 @@ export default class SBSBridgeBot extends Client {
     private commands: CommandList = new CommandList();
     private channelList: Array<ChannelPair> = [];
 	private restConnection: REST;
+	private sbs: SmileBASICSource;
 
-    constructor(token: string, 
+    constructor(token: string,
+				credentials: SBSLoginCredentials,
 				options: ClientOptions = {intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES]}) {
         super(options);
-        this.on('ready', this.onReady);
+
+		this.on('ready', this.onReady);
         this.on('message', this.onMessage);
         this.on('interactionCreate', this.onInteractionCreate);
+		
 		this.commands = LOADED_COMMANDS;
-		console.log(this.commands.toJSON())
-		console.log(this.commands)
-		this.restConnection = new REST({version: '9'}).setToken(token)
-        this.channelList.push(new ChannelPair('774531326203527178', 937))
+		this.restConnection = new REST({version: '9'}).setToken(token);
+        this.channelList.push(new ChannelPair('774531326203527178', 937));
+
+		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
+		
         this.login(token);
     }
 
@@ -52,11 +58,12 @@ export default class SBSBridgeBot extends Client {
 		})();
 	}
 
-    private onReady = () => {
+    private onReady = async () => {
         console.log(`Logged in as ${this.user?.tag || '???'}`);
 		// get all of the guilds that the bot is in then add the application IDs
 		// to them
 		this.guilds.cache.map(x =>  this.addApplicationCommands(x.id));
+		await this.sbs.connect();
     }
 
     private onMessage = async (msg: Message) => {
@@ -69,7 +76,11 @@ export default class SBSBridgeBot extends Client {
             msg.attachments.map(x => `!${x.url}`).join('\n');
     }
 
-	onInteractionCreate(interaction: Interaction) {
+	private onSuccessfulPull = async (chains: any) => {
+		console.log(chains);
+	}
+
+	private onInteractionCreate(interaction: Interaction) {
 		this.commands.interactionHandler(interaction);
 	}
 }
