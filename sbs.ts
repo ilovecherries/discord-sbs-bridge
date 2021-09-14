@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Comment, CommentData } from './sbs/Comment';
 
 export class SBSMessage {
 	constructor(
@@ -66,11 +67,15 @@ export class SmileBASICSource {
 	this.authtoken = token;
 	}
 
-	private get headers(): any {
+	public static generateHeaders(authtoken: string): any {
 		return {
 			'Content-Type': 'application/json',
-			'Authorization': `Bearer ${this.authtoken}`
+			'Authorization': `Bearer ${authtoken}`
 		};
+	}
+
+	private get headers(): any {
+		return SmileBASICSource.generateHeaders(this.authtoken);
 	}
 
 	private get listenerSettings(): any {
@@ -81,7 +86,7 @@ export class SmileBASICSource {
 		}
 	}
 	
-	private runForever() {
+	private runForever = () => {
 		const headers = this.headers;
 		const listenerSettings = this.listenerSettings;
 
@@ -91,11 +96,13 @@ export class SmileBASICSource {
 				if (this.loopTimeout === undefined)
 					return;
 				const status = res.status;
-				const data = JSON.parse(res.data);
 				switch (status) {
 					case 200: // successful
-						this.lastID = data['lastId'];
-						await this.onSuccessfulPull(data['chains']);
+						this.lastID = res.data['lastId'];
+						const comments: Array<Comment> = res.data.chains.comment.map(
+							(c: CommentData) => new Comment(c, res.data.chains.user)
+						);
+						await this.onSuccessfulPull(comments);
 						break;
 					case 401: // invalid auth
 						console.error("auth token has expired");
@@ -115,22 +122,8 @@ export class SmileBASICSource {
 		if (this.authtoken === "")
 			await this.login();
 
-		// get the most recent sent comments so that we can begin polling
-		const commentSettings = {
-			'reverse': true,
-			'limit': 1
-		}
-
-		const headers = this.headers;
-		const lastIdData = await axios.get(
-			`${this.apiURL}Read/chain?requests=comment-${JSON.stringify(commentSettings)}&requests=user.0createUserId&content.0parentId`,
-			{headers}
-		);
-
-		console.log(lastIdData.data)
-		let data = lastIdData.data;
-		
-		this.lastID = JSON.parse(data)['comment'][0]['id'];
+		const lastComment = await Comment.getWithLimit(1);
+		this.lastID = lastComment[0].id;
 
 		this.loopTimeout = setTimeout(this.runForever, 0);
 	}
