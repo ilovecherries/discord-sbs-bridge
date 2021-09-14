@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Comment, CommentData, CommentSettings } from './sbs/Comment';
+import { Comment, CommentData, CommentSettings } from './Comment';
 
 export interface SBSLoginCredentials {
 	username: string;
@@ -118,14 +118,23 @@ export class SmileBASICSource {
 		axios.get(`${this.apiURL}User/me`, {headers})
 			.then(x => this.userId = x.data['id']);
 
-		const lastComment = await Comment.getWithLimit(1, this.apiURL);
-		this.lastID = lastComment[0].id;
+		const lastComment = await Comment.getWithLimit(10, this.apiURL);
+		this.lastID = lastComment.find(x => !x.deleted)!.id;
 
 		this.loopTimeout = setTimeout(this.runForever, 0);
 	}
 
-	async sendMessage(content: string, pageId: number,
+	sendMessage(content: string, pageId: number,
+		settings: CommentSettings = {m: '12y'}): Promise<Comment> {
+		return Comment.send(content, settings, pageId, this.authtoken, this.apiURL);
+	}
+
+	editMessage(msg: Comment, content: string, 
 		settings: CommentSettings = {m: '12y'}) {
-		await Comment.send(content, settings, pageId, this.authtoken, this.apiURL);
+		msg.edit(content, settings, this.authtoken, this.apiURL);
+	}
+
+	deleteMessage(msg: Comment) {
+		msg.delete(this.authtoken, this.apiURL);
 	}
 }

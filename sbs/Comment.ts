@@ -1,6 +1,6 @@
 import ContentAPI from './ContentAPI';
 import { User, UserData } from './User';
-import { SmileBASICSource } from '../sbs';
+import { SmileBASICSource } from './sbs';
 import axios from 'axios';
 
 export interface CommentSettings {
@@ -51,10 +51,7 @@ export class Comment implements CommentData {
         const body = JSON.stringify(data);
         const headers = SmileBASICSource.generateHeaders(authtoken);
         return axios.post(`${apiURL}Comment`, body, {headers}) 
-            .then(res => {
-                console.log(res.data)
-                return new Comment(res.data)
-            });
+            .then(res =>  new Comment(res.data));
         
     }
 
@@ -114,8 +111,7 @@ export class Comment implements CommentData {
         // if the json couldn't be parsed, then that probably means there are no
         // settings sent in the message
         } catch (Error) {
-            console.error(Error);
-            this.settings = {m: '12y'};
+            this.settings = {m: 't'};
             this.textContent = this.content;
         }
     }
@@ -137,7 +133,7 @@ export class Comment implements CommentData {
         this.content = `${JSON.stringify(settings)}\n${content}`;
         const body = JSON.stringify(this);
         const headers = SmileBASICSource.generateHeaders(authtoken);
-        axios.put(`${apiURL}Comment/${this.id}`, body, {headers})
+        axios.put(`${apiURL}Comment/${this.id}`, body, {headers});
     }
 
     delete(authtoken: string, apiURL: string) {

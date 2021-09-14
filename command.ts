@@ -4,10 +4,10 @@ import SBSBridgeBot from './bot';
 
 
 export class Command {
-    private slashCommandData: SlashCommandBuilder;
+    private slashCommandData: Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">;
     private func: Function;
 	
-    constructor(slashCommandData: SlashCommandBuilder, func: Function) {
+    constructor(slashCommandData: Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">, func: Function) {
         this.slashCommandData = slashCommandData;
         this.func = func;
     }
@@ -29,7 +29,7 @@ export class Command {
 export class CommandList {
     private commands: Map<string, Command> = new Map<string, Command>();
 
-    add(name: string, builder: SlashCommandBuilder, func: Function) {
+    add(name: string, builder: Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">, func: Function) {
         builder = builder.setName(name);
         this.commands.set(name, new Command(builder, func));
     }
