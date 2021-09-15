@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { Comment, CommentData, CommentSettings } from './Comment';
 
 export interface SBSLoginCredentials {
@@ -7,6 +7,9 @@ export interface SBSLoginCredentials {
 }
 
 export class SmileBASICSource {
+	// Rejection wait time
+	private static readonly TOO_MANY_REQUESTS_WAIT = 3000;
+
 	/// The location of the API to make requests
 	apiURL: string = 'https://smilebasicsource.com/api/';
 
@@ -86,24 +89,28 @@ export class SmileBASICSource {
 				if (this.loopTimeout === undefined)
 					return;
 				const status = res.status;
+				this.lastID = res.data['lastId'];
+				const comments: Array<Comment> = res.data.chains.comment.map(
+					(c: CommentData) => new Comment(c, res.data.chains.user)
+				)
+				.filter((x: Comment) => x.createUserId !== this.userId);
+				await this.onSuccessfulPull(comments);
+				this.loopTimeout = setTimeout(this.runForever, 0);
+			})
+			.catch(async (err: AxiosError) => {
+				const status = err.response!.status;
+
 				switch (status) {
-					case 200: // successful
-						this.lastID = res.data['lastId'];
-						const comments: Array<Comment> = res.data.chains.comment.map(
-							(c: CommentData) => new Comment(c, res.data.chains.user)
-						)
-						.filter((x: Comment) => x.createUserId !== this.userId);
-						await this.onSuccessfulPull(comments);
-						break;
 					case 401: // invalid auth
 						console.error("auth token has expired");
 						console.log("attempt to refresh auth token");
 						await this.login();
+						break;
 					case 429: // rate limited
 						console.error("rate limited");
-						this.loopTimeout = setTimeout(this.runForever, 3000);
+						this.loopTimeout = setTimeout(this.runForever, SmileBASICSource.TOO_MANY_REQUESTS_WAIT);
+						break;
 				}
-				this.loopTimeout = setTimeout(this.runForever, 0);
 			});
 	}
 

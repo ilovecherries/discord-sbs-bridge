@@ -10,7 +10,7 @@ import { createReadStream, writeFile, readFile } from 'fs';
 import axios from 'axios';
 import sharp from 'sharp';
 import FormData from 'form-data';
-import { save_location } from '../config.json';
+const { save_location } = require('../config.json');
 
 class AvatarAssociation {
 	constructor(
