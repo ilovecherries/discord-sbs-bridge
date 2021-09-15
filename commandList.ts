@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, SlashCommandIntegerOption } from '@discordjs/builders';
-import { CommandInteraction, Interaction } from 'discord.js';
+import { CommandInteraction, GuildMember, Interaction, Permissions } from 'discord.js';
 import SBSBridgeBot from './bot';
 import { ChannelPair } from './ChannelPair';
 import { CommandList } from './command';
@@ -26,11 +26,15 @@ commands.add(
 	async (i: CommandInteraction, client: SBSBridgeBot) => {
 		await i.deferReply()
 
-		client.channelList.set(
-			i.channelId!, i.options.getInteger('id')!
-		)
+		if ((i.member as GuildMember)?.permissions.has(Permissions.FLAGS.MANAGE_CHANNELS)) {
+			client.channelList.set(
+				i.channelId!, i.options.getInteger('id')!
+			)
+			await i.editReply('This channel has been successfully bound!');
+		} else {
+			await i.editReply('You need the Manage Channels permission in order to do this.');
+		}
 
-		await i.editReply('This channel has been successfully bound!');
 	}
 )
 
@@ -41,9 +45,13 @@ commands.add(
 	async (i: CommandInteraction, client: SBSBridgeBot) => {
 		await i.deferReply()
 
-		client.channelList.removeWithDiscordID(i.channelId!)
+		if ((i.member as GuildMember)?.permissions.has(Permissions.FLAGS.MANAGE_CHANNELS)) {
+			client.channelList.removeWithDiscordID(i.channelId!)
+			await i.editReply('This channel has been successfully bound!');
+		} else {
+			await i.editReply('You need the Manage Channels permission in order to do this.');
+		}
 
-		await i.editReply('This channel has been successfully bound!');
 	}
 )
 
