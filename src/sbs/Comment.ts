@@ -1,4 +1,3 @@
-import ContentAPI from './ContentAPI';
 import { User, UserData } from './User';
 import { SmileBASICSource } from './sbs';
 import axios from 'axios';
@@ -29,6 +28,8 @@ export interface CommentData extends CommentToSend {
 }
 
 export class Comment implements CommentData {
+    private authtoken?: string;
+    private apiURL: string;
     createDate: string;
     editDate: string;
     createUserId: number;
@@ -53,14 +54,14 @@ export class Comment implements CommentData {
         const body = JSON.stringify(data);
         const headers = SmileBASICSource.generateHeaders(authtoken);
         return axios.post(`${apiURL}Comment`, body, {headers}) 
-            .then(res =>  new Comment(res.data));
+            .then(res =>  new Comment(res.data, apiURL, [], authtoken));
         
     }
 
     // get comment by ID
     public static getByID(id: number, apiURL: string): Promise<Comment> {
         return axios.get(`${apiURL}Comment?Ids=${id}`)
-            .then(response => (new Comment(response.data[0])));
+            .then(response => (new Comment(response.data[0], apiURL)));
     }
 
     // get last sent comments in selected parentID with length LIMIT
@@ -79,12 +80,11 @@ export class Comment implements CommentData {
         return axios.get(url)
             .then(res => {
                 return res.data['comment']
-                    .filter((x: CommentData) => !x.deleted)
-                    .map((x: CommentData) => new Comment(x, res.data['user'])).reverse()
+                    .map((x: CommentData) => new Comment(x, apiURL, res.data['user'])).reverse()
             });
     }
 
-    constructor(commentData: CommentData, userlist: UserData[]=[]) {
+    constructor(commentData: CommentData, apiURL: string, userlist: UserData[]=[], authtoken: string = undefined) {
         this.parentId = commentData.parentId;
         this.content = commentData.content;
         this.createDate = commentData.createDate;
@@ -93,6 +93,8 @@ export class Comment implements CommentData {
         this.editUserId = commentData.editUserId;
         this.deleted = commentData.deleted;
         this.id = commentData.id;
+        this.authtoken = authtoken;
+        this.apiURL = apiURL;
         // these find if a certain user is in the userlist and we store them
         // for convenience later on
         let createUserData = userlist.find(user => user.id === this.createUserId);
@@ -131,15 +133,15 @@ export class Comment implements CommentData {
         }
     }
 
-    edit(content: string, settings: CommentSettings, authtoken: string, apiURL: string) {
+    edit(content: string, settings: CommentSettings) {
         this.content = `${JSON.stringify(settings)}\n${content}`;
         const body = JSON.stringify(this);
-        const headers = SmileBASICSource.generateHeaders(authtoken);
-        axios.put(`${apiURL}Comment/${this.id}`, body, {headers});
+        const headers = SmileBASICSource.generateHeaders(this.authtoken);
+        axios.put(`${this.apiURL}Comment/${this.id}`, body, {headers});
     }
 
-    delete(authtoken: string, apiURL: string) {
-        const headers = SmileBASICSource.generateHeaders(authtoken);
-        axios.delete(`${apiURL}Comment/${this.id}`, {headers});
+    delete() {
+        const headers = SmileBASICSource.generateHeaders(this.authtoken);
+        axios.delete(`${this.apiURL}Comment/${this.id}`, {headers});
     }
 }

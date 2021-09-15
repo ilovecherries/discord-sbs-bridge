@@ -1,4 +1,4 @@
-import Bot from './bot'
+import Bot from './src/bot'
 const { discord_token, username, password } = require('./config');
 
 const client = new Bot(

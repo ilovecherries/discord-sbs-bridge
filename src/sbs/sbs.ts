@@ -128,13 +128,4 @@ export class SmileBASICSource {
 		settings: CommentSettings = {m: '12y'}): Promise<Comment> {
 		return Comment.send(content, settings, pageId, this.authtoken, this.apiURL);
 	}
-
-	editMessage(msg: Comment, content: string, 
-		settings: CommentSettings = {m: '12y'}) {
-		msg.edit(content, settings, this.authtoken, this.apiURL);
-	}
-
-	deleteMessage(msg: Comment) {
-		msg.delete(this.authtoken, this.apiURL);
-	}
 }

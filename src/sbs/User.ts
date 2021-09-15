@@ -1,5 +1,3 @@
-import ContentAPI from "./ContentAPI";
-
 export interface UserData {
     username: string;
     avatar: number;

@@ -10,7 +10,7 @@ import { createReadStream, writeFile, readFile } from 'fs';
 import axios from 'axios';
 import sharp from 'sharp';
 import FormData from 'form-data';
-const { save_location } = require('./config.json');
+import { save_location } from '../config.json';
 
 class AvatarAssociation {
 	constructor(
@@ -19,6 +19,8 @@ class AvatarAssociation {
 }
 
 export default class SBSBridgeBot extends Client {
+	private static readonly SAVE_TIMEOUT = 30000;
+
     private commands: CommandList = new CommandList();
     public channelList: ChannelPairHandler = new ChannelPairHandler();
 	private restConnection: REST;
@@ -40,7 +42,6 @@ export default class SBSBridgeBot extends Client {
 		this.restConnection = new REST({version: '9'}).setToken(token);
 
 		this.load();
-		// dummy value because FUCK TYPESCRIPT
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
 		
         this.login(token);
@@ -68,7 +69,7 @@ export default class SBSBridgeBot extends Client {
 		// get all of the guilds that the bot is in then add the application IDs
 		// to them
 		this.guilds.cache.map(x =>  this.addApplicationCommands(x.id));
-		setTimeout(this.save, 30000);
+		setTimeout(this.save, SBSBridgeBot.SAVE_TIMEOUT);
 		await this.sbs.connect();
     }
 
@@ -96,7 +97,7 @@ export default class SBSBridgeBot extends Client {
         return channel.getCachedDiscordMessage(msg.id);
 	}
 
-	private onEdit = (before: Message | PartialMessage, after: Message | PartialMessage) => {
+	private onEdit = async (before: Message | PartialMessage, after: Message | PartialMessage) => {
 		try {
 			let message = this.getSBSMessage(before);
         	let content = after.content + 
@@ -105,7 +106,9 @@ export default class SBSBridgeBot extends Client {
 				|| after.author?.username
 				|| message!.settings.b 
 				|| message!.settings.n;
-			this.sbs.editMessage(message!, content, {m: '12y', b: username})
+			const avatar = message!.settings.a 
+				|| await this.getDiscordAvatar(after!.author!);
+			message?.edit(content, {m: '12y', b: username, a: avatar})
 		} catch (e) {
 		}
 	}
@@ -113,7 +116,7 @@ export default class SBSBridgeBot extends Client {
 	private onDelete = (msg: Message | PartialMessage) => {
 		try {
 			let message = this.getSBSMessage(msg);
-			this.sbs.deleteMessage(message!);
+			message!.delete();
 		} catch (e) {
 		}
 	}
@@ -147,6 +150,7 @@ export default class SBSBridgeBot extends Client {
 								'content': c.textContent
 							})
 								.then(x => d.cacheSBSMessage(c, x as Message))
+								.catch(() => d.discordChannel(this).send('There was an error sending a message to Discord!'))
 						}
 					})});
 	}
@@ -156,7 +160,6 @@ export default class SBSBridgeBot extends Client {
 	}
 
 	toJSON() {
-		console.log(this.avatars)
 		return {
 			'channels': this.channelList,
 			'avatars': Object.fromEntries(this.avatars)
@@ -174,7 +177,6 @@ export default class SBSBridgeBot extends Client {
 				.map((x: ChannelPairConfig) => 
 					this.channelList.set(x.discordChannelId, x.sbsChannelId));
 			const avatars: any = new Map<string, AvatarAssociation>(Object.entries(parsedData!.avatars!));
-			console.log(avatars)
 			this.avatars = avatars
 		})
 	}
@@ -184,7 +186,7 @@ export default class SBSBridgeBot extends Client {
 			if (err) {
 				console.error(err)
 			}
-			setTimeout(this.save, 30000);
+			setTimeout(this.save, SBSBridgeBot.SAVE_TIMEOUT);
 		})
 	}
 
@@ -199,7 +201,6 @@ export default class SBSBridgeBot extends Client {
 				.then(x => sharp(x.data)
 					.toFile(`${id}.png`)
 					.then(() => {
-						// i give up for now
 						const data = new FormData();
 
 						data.append('file', createReadStream(`${id}.png`));
@@ -213,7 +214,8 @@ export default class SBSBridgeBot extends Client {
 							this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
 							return sbsid;
 						}).catch(x => console.error(x))
-					}))
+					}).catch(e => console.error(e)))
+					.catch(e => console.error(e))
 		}
 		return new Promise((resolve, reject) => {
 			if (this.avatars.has(id))
