@@ -129,3 +129,5 @@ save.json
 
 *.webp
 *.png
+
+node_modules/
