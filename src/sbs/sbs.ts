@@ -166,6 +166,7 @@ export class SmileBASICSource {
 						case 429: // rate limited
 							console.error("rate limited");
 							this.loopTimeout = setTimeout(this.runForever, SmileBASICSource.TOO_MANY_REQUESTS_WAIT);
+							return;
 							break;
 					}
 				} else {
