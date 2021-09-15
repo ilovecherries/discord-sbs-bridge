@@ -1,5 +1,5 @@
 import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v9';
+import { Routes, TeamMemberMembershipState } from 'discord-api-types/v9';
 import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, TextChannel, ThreadChannel, User, Webhook } from 'discord.js';
 import { CommandList } from './command';
 import LOADED_COMMANDS from './commandList';
@@ -41,7 +41,6 @@ export default class SBSBridgeBot extends Client {
 
 		this.load();
 		// dummy value because FUCK TYPESCRIPT
-		this.avatars.set('x', new AvatarAssociation(-1, ''));
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
 		
         this.login(token);
@@ -157,9 +156,10 @@ export default class SBSBridgeBot extends Client {
 	}
 
 	toJSON() {
+		console.log(this.avatars)
 		return {
 			'channels': this.channelList,
-			'avatars': this.avatars
+			'avatars': Object.fromEntries(this.avatars)
 		}
 	}
 
@@ -173,10 +173,9 @@ export default class SBSBridgeBot extends Client {
 			parsedData!.channels!
 				.map((x: ChannelPairConfig) => 
 					this.channelList.set(x.discordChannelId, x.sbsChannelId));
-			const avatars: any = parsedData!.avatars!;
+			const avatars: any = new Map<string, AvatarAssociation>(Object.entries(parsedData!.avatars!));
 			console.log(avatars)
-			if (Array.from(avatars).length !== 0)
-				this.avatars = avatars;
+			this.avatars = avatars
 		})
 	}
 
@@ -192,9 +191,10 @@ export default class SBSBridgeBot extends Client {
 	getDiscordAvatar = async (author: User): Promise<number> => {
 		const url = author.avatarURL()!;
 		const id = author.id;
+		console.log(this.avatars)
 		let headers = this.sbs.headers;
 		headers['Content-Type'] = 'multipart/form-data'
-		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar === url) {
+		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar !== url) {
 			return axios.get(url, {responseType: 'arraybuffer'})
 				.then(x => sharp(x.data)
 					.toFile(`${id}.png`)
@@ -204,7 +204,7 @@ export default class SBSBridgeBot extends Client {
 
 						data.append('file', createReadStream(`${id}.png`));
 
-						return axios.post(`${this.sbs.apiURL}File`, data, {headers: {
+						return axios.post(`${this.sbs.apiURL}File?bucket=discordavatar`, data, {headers: {
 							'Content-Type': headers['Content-Type'],
 							'Authorization': headers['Authorization'],
 							...data.getHeaders()
