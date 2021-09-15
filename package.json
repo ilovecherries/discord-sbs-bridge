@@ -2,9 +2,9 @@
   "name": "discord-sbs-bridge",
   "version": "1.0.0",
   "description": "Discord SmileBASIC Source Bridge",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "run": "npx ts-node index.ts"
   },
   "repository": {
     "type": "git",
@@ -16,7 +16,7 @@
     "bridge"
   ],
   "author": "Cherry",
-  "license": "WTFPL",
+  "license": "MIT",
   "dependencies": {
     "@discordjs/builders": "^0.6.0",
     "@discordjs/rest": "^0.1.0-canary.0",
@@ -26,7 +26,8 @@
     "discord.js": "^13.1.0",
     "form-data": "^4.0.0",
     "lru-cache": "^6.0.0",
-    "sharp": "^0.29.1"
+    "sharp": "^0.29.1",
+    "ts-node": "^10.2.1"
   },
   "devDependencies": {
     "@types/lru-cache": "^5.1.1",
