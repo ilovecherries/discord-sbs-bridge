@@ -1,19 +1,27 @@
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v9';
-import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, TextChannel, Webhook } from 'discord.js';
+import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, TextChannel, User, Webhook } from 'discord.js';
 import { CommandList } from './command';
 import LOADED_COMMANDS from './commandList';
 import { SBSLoginCredentials, SmileBASICSource } from './sbs/sbs';
 import { Comment } from './sbs/Comment';
 import { ChannelPairConfig, ChannelPairHandler } from './ChannelPair';
 import { writeFile, readFile } from 'fs';
+import axios from 'axios';
+import sharp from 'sharp';
 const { save_location } = require('./config.json');
+
+interface AvatarAssociation {
+	sbsAvatar: number;
+	discordAvatar: string;
+}
 
 export default class SBSBridgeBot extends Client {
     private commands: CommandList = new CommandList();
     public channelList: ChannelPairHandler = new ChannelPairHandler();
 	private restConnection: REST;
 	private sbs: SmileBASICSource;
+	private avatars: Map<string, AvatarAssociation> = new Map<string, AvatarAssociation>();
 
     constructor(token: string,
 				credentials: SBSLoginCredentials,
@@ -30,6 +38,8 @@ export default class SBSBridgeBot extends Client {
 		this.restConnection = new REST({version: '9'}).setToken(token);
 
 		this.load();
+		// dummy value because FUCK TYPESCRIPT
+		this.avatars.set('', {discordAvatar: '', sbsAvatar: -1});
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
 		
         this.login(token);
@@ -73,8 +83,10 @@ export default class SBSBridgeBot extends Client {
         	let content = msg.content + 
             	msg.attachments.map(x => `!${x.url}`).join('\n');
 			const username = msg.member?.nickname || msg.author.username;
-			this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username})
-				.then(c => channel!.cacheDiscordMessage(msg, c));
+			this.getDiscordAvatar(msg.author).then(avatar => {
+				this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: avatar})
+					.then(c => channel!.cacheDiscordMessage(msg, c));
+			})
 		} catch (e) {}
     }
 
@@ -147,7 +159,7 @@ export default class SBSBridgeBot extends Client {
 	toJSON() {
 		return {
 			'channels': this.channelList,
-			// 'avatars': this.avatars
+			'avatars': this.avatars
 		}
 	}
 
@@ -162,6 +174,8 @@ export default class SBSBridgeBot extends Client {
 			parsedData!.channels!
 				.map((x: ChannelPairConfig) => 
 					this.channelList.set(x.discordChannelId, x.sbsChannelId));
+			const avatars: Map<string, AvatarAssociation> = parsedData!.avatars!;
+			this.avatars = avatars;
 		})
 	}
 
@@ -172,5 +186,38 @@ export default class SBSBridgeBot extends Client {
 			}
 			setTimeout(this.save, 30000);
 		})
+	}
+
+	getDiscordAvatar = (author: User): Promise<number> => {
+		const url = author.avatarURL.toString();
+		const id = author.id;
+		console.log(this.avatars)
+		console.log(this)
+		try {
+			console.log(this.avatars.has(id))
+		} catch(e) {
+			console.error(e)
+		}
+		console.log(this.avatars.get(id))
+		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar === url) {
+			console.log('m')
+			return axios.get(url, {responseType: 'stream'})
+				.then(x => {
+					return sharp(Buffer.from(x.data))
+						.png()
+						.toBuffer()
+				})
+				.then(x => axios.post(`${this.sbs.apiURL}File`, x)
+					.then(x => {
+						const sbsid = x.data.id;
+						this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
+						return sbsid;
+					}))
+		}
+		return new Promise((resolve, reject) => {
+			if (this.avatars.has(id))
+				resolve(this.avatars.get(id)!.sbsAvatar)
+			reject('Not able to get a SmileBASIC Source avatar for whatever reason???');
+		});
 	}
 }

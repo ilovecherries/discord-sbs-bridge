@@ -10,6 +10,8 @@ export interface CommentSettings {
     b?: string;
     // The nickname attached to the comment
     n?: string;
+    // The avatar attached to the comment
+    a?: number;
 }
 
 export interface CommentToSend {
