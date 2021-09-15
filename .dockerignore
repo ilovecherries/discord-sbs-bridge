@@ -3,3 +3,6 @@ node_modules
 .log
 config.txt
 exampleconfig.txt
+*.js
+*.js.map
+.env

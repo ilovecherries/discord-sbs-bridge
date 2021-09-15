@@ -1,6 +1,6 @@
 import { REST } from '@discordjs/rest';
-import { Routes, TeamMemberMembershipState } from 'discord-api-types/v9';
-import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, TextChannel, ThreadChannel, User, Webhook } from 'discord.js';
+import { Routes } from 'discord-api-types/v9';
+import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, User } from 'discord.js';
 import { CommandList } from './command';
 import LOADED_COMMANDS from './commandList';
 import { SBSLoginCredentials, SmileBASICSource } from './sbs/sbs';
@@ -8,9 +8,9 @@ import { Comment } from './sbs/Comment';
 import { ChannelPairConfig, ChannelPairHandler } from './ChannelPair';
 import { createReadStream, writeFile, readFile } from 'fs';
 import axios from 'axios';
-import sharp from 'sharp';
-import FormData from 'form-data';
-const save_location = '/save/save.json';
+import * as sharp from 'sharp';
+import * as FormData from 'form-data';
+const save_location = process.env['SAVE_LOCATION'];
 
 
 class AvatarAssociation {
@@ -169,18 +169,22 @@ export default class SBSBridgeBot extends Client {
 	}
 
 	private load() {
-		readFile(save_location, 'utf8', (err, data) => {
-			if (err) {
-				console.error(err);
-				return;
-			}
-			const parsedData = JSON.parse(data);
-			parsedData!.channels!
-				.map((x: ChannelPairConfig) => 
-					this.channelList.set(x.discordChannelId, x.sbsChannelId));
-			const avatars: any = new Map<string, AvatarAssociation>(Object.entries(parsedData!.avatars!));
-			this.avatars = avatars
-		})
+		try {
+			readFile(save_location, 'utf8', (err, data) => {
+				if (err) {
+					console.error(err);
+					return;
+				}
+				const parsedData = JSON.parse(data);
+				parsedData!.channels!
+					.map((x: ChannelPairConfig) => 
+						this.channelList.set(x.discordChannelId, x.sbsChannelId));
+				const avatars: any = new Map<string, AvatarAssociation>(Object.entries(parsedData!.avatars!));
+				this.avatars = avatars;
+			})
+		} catch (e) {
+			console.error("There was an error trying to load the save file:\n"+e);
+		}
 	}
 
 	private save = () => {

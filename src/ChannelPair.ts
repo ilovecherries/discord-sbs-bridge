@@ -1,6 +1,6 @@
 import { Client, Message, TextChannel, Webhook } from "discord.js";
 import { Comment } from './sbs/Comment';
-import LRU from 'lru-cache';
+import * as LRU from 'lru-cache';
 
 
 export interface ChannelPairConfig {

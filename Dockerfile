@@ -96,4 +96,6 @@ WORKDIR /app
 COPY ["package.json", "package-lock.json", "./"]
 RUN npm install
 COPY . .
-CMD [ "npx", "ts-node", "index.ts" ]
+RUN npx tsc -p tsconfig.json
+RUN npm prune --production
+CMD [ "node", "index.js" ]

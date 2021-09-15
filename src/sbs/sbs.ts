@@ -98,18 +98,22 @@ export class SmileBASICSource {
 				this.loopTimeout = setTimeout(this.runForever, 0);
 			})
 			.catch(async (err: AxiosError) => {
-				const status = err.response!.status;
+				if (err.response) {
+					const status = err.response!.status;
 
-				switch (status) {
-					case 401: // invalid auth
-						console.error("auth token has expired");
-						console.log("attempt to refresh auth token");
-						await this.login();
-						break;
-					case 429: // rate limited
-						console.error("rate limited");
-						this.loopTimeout = setTimeout(this.runForever, SmileBASICSource.TOO_MANY_REQUESTS_WAIT);
-						break;
+					switch (status) {
+						case 401: // invalid auth
+							console.error("auth token has expired");
+							console.log("attempt to refresh auth token");
+							await this.login();
+							break;
+						case 429: // rate limited
+							console.error("rate limited");
+							this.loopTimeout = setTimeout(this.runForever, SmileBASICSource.TOO_MANY_REQUESTS_WAIT);
+							break;
+					}
+				} else {
+					console.warn("there was a timeout for listen request")
 				}
 			});
 	}

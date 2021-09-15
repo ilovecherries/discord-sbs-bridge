@@ -1,7 +1,6 @@
 import { SlashCommandBuilder, SlashCommandIntegerOption } from '@discordjs/builders';
-import { CommandInteraction, GuildMember, Interaction, Permissions } from 'discord.js';
+import { CommandInteraction, GuildMember, Permissions } from 'discord.js';
 import SBSBridgeBot from './bot';
-import { ChannelPair } from './ChannelPair';
 import { CommandList } from './command';
 
 const commands = new CommandList()

@@ -132,3 +132,5 @@ save.json
 
 node_modules/
 config.txt
+*.js
+*.js.map
