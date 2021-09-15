@@ -1,7 +1,7 @@
 # discord-sbs-bridge
  SmileBASIC Source Chat Bridge for Discord
 
-# configuration
+## configuration
 .env
 ```
 DISCORD_TOKEN=<PUT_TOKEN_HERE>
