@@ -2,6 +2,12 @@ import { Client, Message, TextChannel, Webhook } from "discord.js";
 import { Comment } from './sbs/Comment';
 import LRU from 'lru-cache';
 
+
+export interface ChannelPairConfig {
+    discordChannelId: string;
+    sbsChannelId: number;
+}
+
 export class ChannelPair {
 	private discordChannelCached?: TextChannel;
 	// sbs --> discord
@@ -106,4 +112,8 @@ export class ChannelPairHandler {
 	getAll(): Array<ChannelPair> {
 		return Array.from(this.channelList.values());
 	}
+
+    toJSON() {
+        return Array.from(this.channelList.values()).map(x => x.toJSON())
+    }
 }

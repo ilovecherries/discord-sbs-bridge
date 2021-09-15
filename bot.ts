@@ -5,8 +5,9 @@ import { CommandList } from './command';
 import LOADED_COMMANDS from './commandList';
 import { SBSLoginCredentials, SmileBASICSource } from './sbs/sbs';
 import { Comment } from './sbs/Comment';
-import LRU from 'lru-cache';
-import { ChannelPairHandler } from './ChannelPair';
+import { ChannelPairConfig, ChannelPairHandler } from './ChannelPair';
+import { writeFile, readFile } from 'fs';
+const { save_location } = require('./config.json');
 
 export default class SBSBridgeBot extends Client {
     private commands: CommandList = new CommandList();
@@ -27,9 +28,8 @@ export default class SBSBridgeBot extends Client {
 		
 		this.commands = LOADED_COMMANDS;
 		this.restConnection = new REST({version: '9'}).setToken(token);
-        this.channelList.set('774531326203527178', 937);
-        this.channelList.set('774536860374401025', 6661);
 
+		this.load();
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
 		
         this.login(token);
@@ -57,6 +57,7 @@ export default class SBSBridgeBot extends Client {
 		// get all of the guilds that the bot is in then add the application IDs
 		// to them
 		this.guilds.cache.map(x =>  this.addApplicationCommands(x.id));
+		setTimeout(this.save, 30000);
 		await this.sbs.connect();
     }
 
@@ -141,5 +142,35 @@ export default class SBSBridgeBot extends Client {
 
 	private onInteractionCreate(interaction: Interaction) {
 		this.commands.interactionHandler(interaction);
+	}
+
+	toJSON() {
+		return {
+			'channels': this.channelList,
+			// 'avatars': this.avatars
+		}
+	}
+
+	private load() {
+		readFile(save_location, 'utf8', (err, data) => {
+			if (err) {
+				console.error(err);
+				return;
+			}
+			const parsedData = JSON.parse(data);
+			console.log(parsedData)
+			parsedData!.channels!
+				.map((x: ChannelPairConfig) => 
+					this.channelList.set(x.discordChannelId, x.sbsChannelId));
+		})
+	}
+
+	private save = () => {
+		writeFile(save_location, JSON.stringify(this), err => {
+			if (err) {
+				console.error(err)
+			}
+			setTimeout(this.save, 30000);
+		})
 	}
 }
