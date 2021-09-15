@@ -199,8 +199,7 @@ export default class SBSBridgeBot extends Client {
 	getDiscordAvatar = async (author: User): Promise<number> => {
 		const url = author.avatarURL()!;
 		const id = author.id;
-		let headers = this.sbs.headers;
-		headers['Content-Type'] = 'multipart/form-data'
+		let headers = this.sbs.formDataHeaders;
 		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar !== url) {
 			return axios.get(url, {responseType: 'arraybuffer'})
 				.then(x => sharp(x.data)

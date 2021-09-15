@@ -69,13 +69,13 @@ export class Comment implements CommentData {
         apiURL: string,
         parentID: undefined | number = undefined,): Promise<Array<Comment>> {
         // TODO: Replace with Chainer dedicated class
-        let settings: any = {
+        const settings: any = {
             'reverse': true,
             'limit': limit
         };
         if (parentID)
             settings.parentIds = [parentID];
-        let url = `${apiURL}Read/chain/?requests=comment-${JSON.stringify(settings)}&requests=user.0createUserId&requests=user.0editUserId`;
+        const url = `${apiURL}Read/chain/?requests=comment-${JSON.stringify(settings)}&requests=user.0createUserId&requests=user.0editUserId`;
 
         return axios.get(url)
             .then(res => {
@@ -97,17 +97,17 @@ export class Comment implements CommentData {
         this.apiURL = apiURL;
         // these find if a certain user is in the userlist and we store them
         // for convenience later on
-        let createUserData = userlist.find(user => user.id === this.createUserId);
+        const createUserData = userlist.find(user => user.id === this.createUserId);
         if (createUserData !== undefined) 
             this.createUser = new User(createUserData)
 
-        let editUserData = userlist.find(user => user.id === this.editUserId);
+        const editUserData = userlist.find(user => user.id === this.editUserId);
         if (editUserData !== undefined) 
             this.editUser = new User(editUserData)
         // extract the settings from the text
         try {
-            let firstNewline = this.content.indexOf('\n');
-            let settings: CommentSettings = JSON.parse(
+            const firstNewline = this.content.indexOf('\n');
+            const settings: CommentSettings = JSON.parse(
                 this.content.substring(0, firstNewline)
             );
             this.settings = settings;

@@ -7,70 +7,126 @@ export interface SBSLoginCredentials {
 }
 
 export class SmileBASICSource {
-	// Rejection wait time
+	/**
+	 * The amount of time to wait before making another request when making
+	 * too many requests at once.
+	 */
 	private static readonly TOO_MANY_REQUESTS_WAIT = 3000;
 
-	/// The location of the API to make requests
-	apiURL: string = 'https://smilebasicsource.com/api/';
+	/**
+	 * Where to make API calls to grab comments/initializer 
+	 */	
+	readonly apiURL: string = 'https://smilebasicsource.com/api/';
 
-	/// A function that is called whenever a pull is successful
-	private onSuccessfulPull: Function;
+	/**
+	 * Whenever a pull from the listener is successful in runForever(), it will
+	 * run this callback.
+	 */
+	private successfulPullCallback: Function;
 
-	/// The credentials that are used to create authtokens with
+	/**
+	 * The credentials that are used to login to the API with and create
+	 * auth tokens with. 
+	 * 
+	 * They are stored internally because the auth token expires after a month, 
+	 * so long running processes require the credentials to make the auth 
+	 * tokens once again.
+	 */
 	private credentials: SBSLoginCredentials;
 
-	/// The authtoken that is used to create API calls with
+	/**
+	 * The token that is used to make API calls with
+	 */
 	authtoken: string = '';
 
-	/// The last ID in the most recent request, this is used in order to
-	/// make new requests
+	/**
+	 * The ID in the most recent poll, this is used in order to make new
+	 * requests starting from this point.
+	 */
 	private lastID: number = -1;
 
-	/// Store the timeout for the infinite loop
+	/**
+	 * Stores the timeout for the infinite loop. This is so that if a
+	 * destructor is ever made at some point in time, this can be used to
+	 * cancel the infinite loop if it is undefined.
+	 */
 	private loopTimeout?: ReturnType<typeof setTimeout>;
 
-	/// The self user for filtering out own requests
+	// TODO: Should probably make it so that the filtering isn't handled by
+	// this, should leave that to other interfaces accessing this.
+	/**
+	 * This is used for filtering out requests from the user that is accessing
+	 * the API.
+	 */
 	private userId: number = -1;
 
+	/**
+	 * Creates a new SmileBASIC Source object that can be used later to
+	 * connect with.
+	 * 
+	 * @param onSuccessfulPull Callback function to call when a pull is successful.
+	 * @param credentials The credentials that are used to login to the site.
+	 * @param apiURL The URL where requests for the API will be make 
+	 */
 	constructor(onSuccessfulPull: Function,
 				credentials: SBSLoginCredentials,
 			    apiURL?: string) {
-		this.onSuccessfulPull = onSuccessfulPull;
+		this.successfulPullCallback = onSuccessfulPull;
 		this.credentials = credentials
 		this.apiURL = apiURL || this.apiURL;
 	}
 
-	/// Creates an auth token from SmileBASIC Source and saves it for
-	/// future use
-	async login() {
-		const data = JSON.stringify({
-			'username': this.credentials.username,
-			'password': this.credentials.password
+	/**
+	 * Creates an authtoken from SmileBASIC Source using the credentials stored
+	 * @returns Authentification token
+	 */
+	async login(credentials: SBSLoginCredentials = this.credentials): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const data = JSON.stringify({
+				'username': credentials.username,
+				'password': credentials.password
+			});
+			const headers = {
+				'Content-Type': 'application/json'
+			};
+			axios.post(`${this.apiURL}User/authenticate`, data, {headers})
+				.then(res => resolve(this.authtoken))
+				.catch(err => reject(err));
 		});
-		const token = await axios.post(
-			`${this.apiURL}User/authenticate`,
-			data,
-			{
-				headers: {
-					'Content-Type': 'application/json'
-				}
-			}
-		)
-			.then(res => res.data);
-		this.authtoken = token;
 	}
 
-	public static generateHeaders(authtoken: string): any {
+	/**
+	 * This generates headers that can be used for creating authenticated
+	 * requests using JSON
+	 * 
+	 * @param authtoken The authentification token for the header
+	 * @returns The headers that are used to create authenticated requests
+	 */
+	public static generateHeaders(authtoken: string, 
+		contentType: string = 'application/json'): any {
 		return {
-			'Content-Type': 'application/json',
+			'Content-Type': contentType,
 			'Authorization': `Bearer ${authtoken}`
 		};
 	}
 
+	/**
+	 * Headers that are used in order to make JSON requests.
+	 */
 	public get headers(): any {
 		return SmileBASICSource.generateHeaders(this.authtoken);
 	}
 
+	/**
+	 * Headers that are used in order to make file uploads with form data.
+	 */
+	public get formDataHeaders(): any {
+		return SmileBASICSource.generateHeaders(this.authtoken, 'multipart/form-data');
+	}
+
+	/**
+	 * Settings that are used by the listener in order to make another request
+	 */
 	private get listenerSettings(): any {
 		return {
 			'lastId': this.lastID,
@@ -94,7 +150,7 @@ export class SmileBASICSource {
 					(c: CommentData) => new Comment(c, this.apiURL, res.data.chains.user, this.authtoken)
 				)
 				.filter((x: Comment) => x.createUserId !== this.userId);
-				await this.onSuccessfulPull(comments);
+				await this.successfulPullCallback(comments);
 				this.loopTimeout = setTimeout(this.runForever, 0);
 			})
 			.catch(async (err: AxiosError) => {
@@ -115,6 +171,7 @@ export class SmileBASICSource {
 				} else {
 					console.warn("there was a timeout for listen request")
 				}
+				this.loopTimeout = setTimeout(this.runForever, 0);
 			});
 	}
 
@@ -122,7 +179,7 @@ export class SmileBASICSource {
 	/// infinite loop
 	async connect() {
 		if (this.authtoken === "")
-			await this.login();
+			this.authtoken = await this.login();
 
 		// this is so we can filter our own messages
 		const headers = this.headers;
