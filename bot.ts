@@ -6,7 +6,7 @@ import LOADED_COMMANDS from './commandList';
 import { SBSLoginCredentials, SmileBASICSource } from './sbs/sbs';
 import { Comment } from './sbs/Comment';
 import { ChannelPairConfig, ChannelPairHandler } from './ChannelPair';
-import { writeFile, readFile } from 'fs';
+import { createReadStream, writeFile, readFile } from 'fs';
 import axios from 'axios';
 import sharp from 'sharp';
 import FormData from 'form-data';
@@ -193,27 +193,27 @@ export default class SBSBridgeBot extends Client {
 		const url = author.avatarURL()!;
 		const id = author.id;
 		let headers = this.sbs.headers;
-		headers['Content-Type'] = ''
+		headers['Content-Type'] = 'multipart/form-data'
 		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar === url) {
 			return axios.get(url, {responseType: 'arraybuffer'})
-				.then(x => {
-					return sharp(x.data)
-						.png()
-						.toBuffer()
-						.then(x => {
-							const form = new FormData();
-							form.append('file', x);
-							return form;
-						})
-						.then(x => axios.post(`${this.sbs.apiURL}File`, x, {headers})
-							.then(x => {
-								const sbsid = x.data.id;
-								this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
-								return sbsid;
-							}))
-						.catch(x => console.error(x))
-				})
-				.catch(x => console.error(x))
+				.then(x => sharp(x.data)
+					.toFile(`${id}.png`)
+					.then(() => {
+						// i give up for now
+						const data = new FormData();
+
+						data.append('file', createReadStream(`${id}.png`));
+
+						return axios.post(`${this.sbs.apiURL}File`, data, {headers: {
+							'Content-Type': headers['Content-Type'],
+							'Authorization': headers['Authorization'],
+							...data.getHeaders()
+						}}).then(x => {
+							const sbsid = x.data.id;
+							this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
+							return sbsid;
+						}).catch(x => console.error(x))
+					}))
 		}
 		return new Promise((resolve, reject) => {
 			if (this.avatars.has(id))
