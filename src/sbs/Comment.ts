@@ -3,9 +3,13 @@ import { SmileBASICSource } from './sbs';
 import axios from 'axios';
 
 export interface CommentSettings {
-    // The markup type of the comment
+    /**
+     * The markup type of the comment
+     */
     m: string;
-    // The bridge username
+    /**
+     * The display username 
+     */
     b?: string;
     // The nickname attached to the comment
     n?: string;

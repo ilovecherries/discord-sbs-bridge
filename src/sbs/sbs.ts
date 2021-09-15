@@ -132,6 +132,10 @@ export class SmileBASICSource {
 		}
 	}
 	
+	/**
+	 * The internal infinite loop that is used to make requests indefinitely
+	 * until loopTimeout is destroyed.
+	 */
 	private runForever = () => {
 		const headers = this.headers;
 		const listenerSettings = this.listenerSettings;
@@ -173,8 +177,10 @@ export class SmileBASICSource {
 			});
 	}
 
-	/// Connects to the API and begins polling from the website in an
-	/// infinite loop
+	/**
+	 * Connects to the API and begins polling from the website in an infinite
+	 * loop
+	 */
 	async connect() {
 		if (this.authtoken === "")
 			this.authtoken = await this.login();
@@ -185,11 +191,19 @@ export class SmileBASICSource {
 			.then(x => this.userId = x.data['id']);
 
 		const lastComment = await Comment.getWithLimit(10, this.apiURL);
+		lastComment.reverse();
 		this.lastID = lastComment.find(x => !x.deleted)!.id;
 
 		this.loopTimeout = setTimeout(this.runForever, 0);
 	}
 
+	/**
+	 * Sends a message using the API URL and authtoken stored. 
+	 * @param content The content of the message being sent
+	 * @param pageId The page ID where the message will be sent
+	 * @param settings The metadata of the message
+	 * @returns The newly sent comment
+	 */
 	sendMessage(content: string, pageId: number,
 		settings: CommentSettings = {m: '12y'}): Promise<Comment> {
 		return Comment.send(content, settings, pageId, this.authtoken, this.apiURL);
