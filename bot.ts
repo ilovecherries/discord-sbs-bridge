@@ -1,6 +1,6 @@
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v9';
-import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, TextChannel, User, Webhook } from 'discord.js';
+import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, TextChannel, ThreadChannel, User, Webhook } from 'discord.js';
 import { CommandList } from './command';
 import LOADED_COMMANDS from './commandList';
 import { SBSLoginCredentials, SmileBASICSource } from './sbs/sbs';
@@ -9,11 +9,13 @@ import { ChannelPairConfig, ChannelPairHandler } from './ChannelPair';
 import { writeFile, readFile } from 'fs';
 import axios from 'axios';
 import sharp from 'sharp';
+import FormData from 'form-data';
 const { save_location } = require('./config.json');
 
-interface AvatarAssociation {
-	sbsAvatar: number;
-	discordAvatar: string;
+class AvatarAssociation {
+	constructor(
+		public sbsAvatar: number,
+		public discordAvatar: string){}
 }
 
 export default class SBSBridgeBot extends Client {
@@ -39,7 +41,7 @@ export default class SBSBridgeBot extends Client {
 
 		this.load();
 		// dummy value because FUCK TYPESCRIPT
-		this.avatars.set('', {discordAvatar: '', sbsAvatar: -1});
+		this.avatars.set('x', new AvatarAssociation(-1, ''));
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
 		
         this.login(token);
@@ -83,10 +85,8 @@ export default class SBSBridgeBot extends Client {
         	let content = msg.content + 
             	msg.attachments.map(x => `!${x.url}`).join('\n');
 			const username = msg.member?.nickname || msg.author.username;
-			this.getDiscordAvatar(msg.author).then(avatar => {
-				this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: avatar})
-					.then(c => channel!.cacheDiscordMessage(msg, c));
-			})
+			this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: await this.getDiscordAvatar(msg.author)})
+				.then(c => channel!.cacheDiscordMessage(msg, c));
 		} catch (e) {}
     }
 
@@ -170,12 +170,13 @@ export default class SBSBridgeBot extends Client {
 				return;
 			}
 			const parsedData = JSON.parse(data);
-			console.log(parsedData)
 			parsedData!.channels!
 				.map((x: ChannelPairConfig) => 
 					this.channelList.set(x.discordChannelId, x.sbsChannelId));
-			const avatars: Map<string, AvatarAssociation> = parsedData!.avatars!;
-			this.avatars = avatars;
+			const avatars: any = parsedData!.avatars!;
+			console.log(avatars)
+			if (Array.from(avatars).length !== 0)
+				this.avatars = avatars;
 		})
 	}
 
@@ -188,31 +189,31 @@ export default class SBSBridgeBot extends Client {
 		})
 	}
 
-	getDiscordAvatar = (author: User): Promise<number> => {
-		const url = author.avatarURL.toString();
+	getDiscordAvatar = async (author: User): Promise<number> => {
+		const url = author.avatarURL()!;
 		const id = author.id;
-		console.log(this.avatars)
-		console.log(this)
-		try {
-			console.log(this.avatars.has(id))
-		} catch(e) {
-			console.error(e)
-		}
-		console.log(this.avatars.get(id))
+		let headers = this.sbs.headers;
+		headers['Content-Type'] = ''
 		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar === url) {
-			console.log('m')
-			return axios.get(url, {responseType: 'stream'})
+			return axios.get(url, {responseType: 'arraybuffer'})
 				.then(x => {
-					return sharp(Buffer.from(x.data))
+					return sharp(x.data)
 						.png()
 						.toBuffer()
+						.then(x => {
+							const form = new FormData();
+							form.append('file', x);
+							return form;
+						})
+						.then(x => axios.post(`${this.sbs.apiURL}File`, x, {headers})
+							.then(x => {
+								const sbsid = x.data.id;
+								this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
+								return sbsid;
+							}))
+						.catch(x => console.error(x))
 				})
-				.then(x => axios.post(`${this.sbs.apiURL}File`, x)
-					.then(x => {
-						const sbsid = x.data.id;
-						this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
-						return sbsid;
-					}))
+				.catch(x => console.error(x))
 		}
 		return new Promise((resolve, reject) => {
 			if (this.avatars.has(id))

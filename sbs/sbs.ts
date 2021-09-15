@@ -17,7 +17,7 @@ export class SmileBASICSource {
 	private credentials: SBSLoginCredentials;
 
 	/// The authtoken that is used to create API calls with
-	private authtoken: string = '';
+	authtoken: string = '';
 
 	/// The last ID in the most recent request, this is used in order to
 	/// make new requests
@@ -64,7 +64,7 @@ export class SmileBASICSource {
 		};
 	}
 
-	private get headers(): any {
+	public get headers(): any {
 		return SmileBASICSource.generateHeaders(this.authtoken);
 	}
 
