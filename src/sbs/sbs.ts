@@ -91,7 +91,7 @@ export class SmileBASICSource {
 				const status = res.status;
 				this.lastID = res.data['lastId'];
 				const comments: Array<Comment> = res.data.chains.comment.map(
-					(c: CommentData) => new Comment(c, res.data.chains.user)
+					(c: CommentData) => new Comment(c, this.apiURL, res.data.chains.user, this.authtoken)
 				)
 				.filter((x: Comment) => x.createUserId !== this.userId);
 				await this.onSuccessfulPull(comments);

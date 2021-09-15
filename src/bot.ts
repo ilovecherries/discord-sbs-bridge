@@ -144,6 +144,7 @@ export default class SBSBridgeBot extends Client {
 							}
 							catch (e){}
 						} else {
+							console.log(c.createUser)
 							w.send({
 								'username': c.createUser?.username,
 								'avatarURL': c.createUser?.getAvatarLink(this.sbs.apiURL),
