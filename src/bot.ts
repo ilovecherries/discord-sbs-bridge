@@ -10,13 +10,15 @@ import { createReadStream, writeFile, readFile } from 'fs';
 import axios from 'axios';
 import sharp from 'sharp';
 import FormData from 'form-data';
-const { save_location } = require('../config.json');
+const save_location = '/save/save.json';
+
 
 class AvatarAssociation {
 	constructor(
 		public sbsAvatar: number,
 		public discordAvatar: string){}
 }
+
 
 export default class SBSBridgeBot extends Client {
 	private static readonly SAVE_TIMEOUT = 30000;

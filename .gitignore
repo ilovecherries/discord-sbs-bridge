@@ -131,3 +131,4 @@ save.json
 *.png
 
 node_modules/
+config.txt
