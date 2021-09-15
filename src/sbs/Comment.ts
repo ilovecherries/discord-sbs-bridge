@@ -84,7 +84,7 @@ export class Comment implements CommentData {
             });
     }
 
-    constructor(commentData: CommentData, apiURL: string, userlist: UserData[]=[], authtoken: string = undefined) {
+    constructor(commentData: CommentData, apiURL: string, userlist: UserData[]=[], authtoken?: string) {
         this.parentId = commentData.parentId;
         this.content = commentData.content;
         this.createDate = commentData.createDate;
@@ -133,15 +133,25 @@ export class Comment implements CommentData {
         }
     }
 
-    edit(content: string, settings: CommentSettings) {
+    edit(content: string, settings: CommentSettings, authtoken?: string) {
         this.content = `${JSON.stringify(settings)}\n${content}`;
         const body = JSON.stringify(this);
-        const headers = SmileBASICSource.generateHeaders(this.authtoken);
-        axios.put(`${this.apiURL}Comment/${this.id}`, body, {headers});
+        const auth = this.authtoken || authtoken;
+        if (auth) {
+            const headers = SmileBASICSource.generateHeaders(auth);
+            axios.put(`${this.apiURL}Comment/${this.id}`, body, {headers});
+        } else {
+            throw new Error("A valid auth token isn't available to edit the message.")
+        }
     }
 
-    delete() {
-        const headers = SmileBASICSource.generateHeaders(this.authtoken);
-        axios.delete(`${this.apiURL}Comment/${this.id}`, {headers});
+    delete(authtoken?: string) {
+        const auth = this.authtoken || authtoken;
+        if (auth) {
+            const headers = SmileBASICSource.generateHeaders(auth);
+            axios.delete(`${this.apiURL}Comment/${this.id}`, {headers});
+        } else {
+            throw new Error("A valid auth token isn't available to delete the message.")
+        }
     }
 }
