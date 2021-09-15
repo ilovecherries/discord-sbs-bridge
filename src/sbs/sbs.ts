@@ -80,19 +80,16 @@ export class SmileBASICSource {
 	 * Creates an authtoken from SmileBASIC Source using the credentials stored
 	 * @returns Authentification token
 	 */
-	async login(credentials: SBSLoginCredentials = this.credentials): Promise<string> {
-		return new Promise((resolve, reject) => {
-			const data = JSON.stringify({
-				'username': credentials.username,
-				'password': credentials.password
-			});
-			const headers = {
-				'Content-Type': 'application/json'
-			};
-			axios.post(`${this.apiURL}User/authenticate`, data, {headers})
-				.then(res => resolve(this.authtoken))
-				.catch(err => reject(err));
+	login(credentials: SBSLoginCredentials = this.credentials): Promise<string> {
+		const data = JSON.stringify({
+			'username': credentials.username,
+			'password': credentials.password
 		});
+		const headers = {
+			'Content-Type': 'application/json'
+		};
+		return axios.post(`${this.apiURL}User/authenticate`, data, {headers})
+				.then(res => res.data as string)
 	}
 
 	/**
