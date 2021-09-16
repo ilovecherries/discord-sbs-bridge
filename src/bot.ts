@@ -125,7 +125,7 @@ export default class SBSBridgeBot extends Client {
 			if (webhook.id === msg.author!.id)
 				return;
         	let content = msg.content + 
-            	msg.attachments.map(x => `!${x.url}`).join('\n');
+            	msg.attachments.reduce((x, y) => `x\n!${y.url}`);
 			const username = msg.member?.nickname || msg.author.username;
 			this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: await this.getDiscordAvatar(msg.author)})
 				.then(c => channel!.cacheDiscordMessage(msg, c));
