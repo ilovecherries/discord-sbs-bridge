@@ -92,14 +92,10 @@ export default class SBSBridgeBot extends Client {
 		this.on('messageDelete', this.onDelete);
 		
 		this.commands = LOADED_COMMANDS;
-		this.restConnection = new REST({version: '9'});
+		this.restConnection = new REST({version: '9'}).setToken(authtoken);
 
 		this.login(authtoken)
-			.then(s => { 
-				this.restConnection.setToken(authtoken);
-				this.sbs.connect()
-					.catch(err => console.error(err))
-			})
+			.then(() =>this.sbs.connect())
 			.catch(err => console.error(err));
 		this.load();
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
