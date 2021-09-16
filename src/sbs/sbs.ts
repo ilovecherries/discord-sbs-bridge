@@ -11,7 +11,7 @@ export class SmileBASICSource {
 	 * The amount of time to wait before making another request when making
 	 * too many requests at once.
 	 */
-	private static readonly TOO_MANY_REQUESTS_WAIT = 3000;
+	static readonly TOO_MANY_REQUESTS_WAIT = 3000;
 
 	/**
 	 * Where to make API calls to grab comments/initializer 

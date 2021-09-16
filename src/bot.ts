@@ -129,7 +129,8 @@ export default class SBSBridgeBot extends Client {
 	            msg.attachments.map(x => `!${x.url}`).join('\n');
 			const username = msg.member?.nickname || msg.author.username;
 			this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: await this.getDiscordAvatar(msg.author)})
-				.then(c => channel!.cacheDiscordMessage(msg, c));
+				.then(c => channel!.cacheDiscordMessage(msg, c))
+				.catch(err => console.error(err));
 		} catch (e) {}
     }
 
@@ -143,7 +144,12 @@ export default class SBSBridgeBot extends Client {
  			const channel = this.channelList.getSBS(msg.channelId);
         	if (channel === undefined) 
             	reject("The associated message for SBS was not found.");
-        	resolve(channel.getCachedDiscordMessage(msg.id));
+			try {
+				const message = channel.getCachedDiscordMessage(msg.id);
+				resolve(message);
+			} catch (err) {
+				reject(err);
+			}
 		})
 	}
 

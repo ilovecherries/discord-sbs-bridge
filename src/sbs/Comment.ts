@@ -135,7 +135,6 @@ export class Comment implements CommentData {
         const headers = SmileBASICSource.generateHeaders(authtoken);
         return axios.post(`${apiURL}Comment`, body, {headers}) 
             .then(res =>  new Comment(res.data, apiURL, [], authtoken));
-        
     }
 
     /**
