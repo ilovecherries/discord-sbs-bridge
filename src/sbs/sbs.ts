@@ -181,20 +181,24 @@ export class SmileBASICSource {
 	 * Connects to the API and begins polling from the website in an infinite
 	 * loop
 	 */
-	async connect() {
-		if (this.authtoken === "")
-			this.authtoken = await this.login();
+	connect = (): Promise<void> => {
+		return new Promise(async (resolve, reject) => {
+			if (this.authtoken === "")
+				this.authtoken = await this.login();
 
-		// this is so we can filter our own messages
-		const headers = this.headers;
-		axios.get(`${this.apiURL}User/me`, {headers})
-			.then(x => this.userId = x.data['id']);
+			// this is so we can filter our own messages
+			const headers = this.headers;
+			axios.get(`${this.apiURL}User/me`, {headers})
+				.then(x => this.userId = x.data['id'])
+				.catch(err => reject(err));
 
-		const lastComment = await Comment.getWithLimit(10, this.apiURL);
-		lastComment.reverse();
-		this.lastID = lastComment.find(x => !x.deleted)!.id;
+			const lastComment = await Comment.getWithLimit(10, this.apiURL);
+			lastComment.reverse();
+			this.lastID = lastComment.find(x => !x.deleted)!.id;
 
-		this.loopTimeout = setTimeout(this.runForever, 0);
+			this.loopTimeout = setTimeout(this.runForever, 0);
+			resolve();
+		});
 	}
 
 	/**

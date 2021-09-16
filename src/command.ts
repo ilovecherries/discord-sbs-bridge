@@ -1,5 +1,7 @@
 import { SlashCommandBuilder } from '@discordjs/builders';
-import { CommandInteraction, Interaction } from 'discord.js';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/rest/v9';
+import { Client, CommandInteraction, Interaction } from 'discord.js';
 import SBSBridgeBot from './bot';
 
 
@@ -40,6 +42,23 @@ export class CommandList {
 
     toJSON() {
         return Array.from(this.commands.values()).map(x => x.toJSON());
+    }
+
+    addSlashCommands(client: Client, restConnection: REST, guildId: string) {
+		(async () => {
+			try {
+				console.log(`Started refreshing application (/) commands for ${guildId}.`);
+
+				await restConnection.put(
+					Routes.applicationGuildCommands(client.user!.id, guildId),
+					{ body: this.toJSON() },
+				);
+
+				console.log(`Successfully reloaded application (/) commands for ${guildId}.`);
+			} catch (error) {
+				console.error(error);
+			}
+		})();
     }
 
     async interactionHandler(interaction: Interaction) {

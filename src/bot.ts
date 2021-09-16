@@ -10,27 +10,76 @@ import { createReadStream, writeFile, readFile } from 'fs';
 import axios from 'axios';
 import * as sharp from 'sharp';
 import * as FormData from 'form-data';
-const save_location = process.env['SAVE_LOCATION'];
 
 
+/**
+ * The association between a SmileBASIC Source avatar and Discord avatar
+ */
 class AvatarAssociation {
 	constructor(
+		/**
+		 * The ID number for a file on SmileBASIC Source that associates
+		 * with the avatar
+		 */
 		public sbsAvatar: number,
+		/**
+		 * The URL for the Discord avatar that associates with the avatar
+		 */
 		public discordAvatar: string){}
 }
 
 
+/**
+ * The Discord bot instance for the SmileBASIC Source bridge
+ */
 export default class SBSBridgeBot extends Client {
+	/**
+	 * The amount of time to wait in between save points of the bot's
+	 * runtime.
+	 * @see save
+	 */
 	private static readonly SAVE_TIMEOUT = 30000;
 
+	/**
+	 * The file location where the save data will be preserved
+	 */
+	private static readonly SAVE_LOCATION: string = process.env['SAVE_LOCATION'] || 'save.json';
+
+	/**
+	 * A wrapper and manager for slash commmands
+	 */
     private commands: CommandList = new CommandList();
+
+	/**
+	 * Handles channel pair associations between SmileBASIC Source and Discord
+	 * channels
+	 */
     public channelList: ChannelPairHandler = new ChannelPairHandler();
+
+	/**
+	 * A connection that is used for the bot to create interactions such as
+	 * slash commands.
+	 */
 	private restConnection: REST;
+
+	/**
+	 * A wrapper that is used for keeping a persistent connection to SmileBASIC
+	 * Source.
+	 */
 	private sbs: SmileBASICSource;
+
+	/**
+	 * An association list that is used to manage avatar. 
+	 * The keys being used are the Discord user IDs,
+	 */
 	private avatars: Map<string, AvatarAssociation> = new Map<string, AvatarAssociation>();
 
-    constructor(token: string,
-				credentials: SBSLoginCredentials,
+	/**
+	 * Create a new instance of the Discord-SBS bridge bot
+	 * @param credentials The credentials for logging into SmileBASIC Source
+	 * @param options Client options such as intents, there are already sane defaults
+	 */
+    constructor(credentials: SBSLoginCredentials,
 				options: ClientOptions = {intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES]}) {
         super(options);
 
@@ -41,40 +90,44 @@ export default class SBSBridgeBot extends Client {
 		this.on('messageDelete', this.onDelete);
 		
 		this.commands = LOADED_COMMANDS;
-		this.restConnection = new REST({version: '9'}).setToken(token);
+		this.restConnection = new REST({version: '9'});
 
 		this.load();
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
-		
-        this.login(token);
     }
 
-	private addApplicationCommands = (guildId: string) => {
-		(async () => {
-			try {
-				console.log(`Started refreshing application (/) commands for ${guildId}.`);
-
-				await this.restConnection.put(
-					Routes.applicationGuildCommands(this.user!.id, guildId),
-					{ body: this.commands.toJSON() },
-				);
-
-				console.log(`Successfully reloaded application (/) commands for ${guildId}.`);
-			} catch (error) {
-				console.error(error);
-			}
-		})();
+	/**
+	 * Creates a connection to both Discord and SBS
+	 * @param authtoken The authtoken to connect to Discord's API with
+	 * @returns not really... sure...
+	 */
+	login(authtoken?: string): Promise<string> {
+		return new Promise(async (resolve, reject) => {
+			super.login(authtoken)
+				.then(s => { 
+					this.restConnection.setToken(authtoken);
+					this.sbs.connect()
+						.then(() => resolve(s))
+						.catch(err => reject(err))
+				})
+				.catch(err => reject(err));
+		})
 	}
 
+	/**
+	 * Is called when the Discord bot is in "ready" state
+	 */
     private onReady = async () => {
         console.log(`Logged in as ${this.user!.tag}`);
-		// get all of the guilds that the bot is in then add the application IDs
-		// to them
-		this.guilds.cache.map(x =>  this.addApplicationCommands(x.id));
+		this.guilds.cache.map(x => 
+			this.commands.addSlashCommands(this, this.restConnection, x.id));
 		setTimeout(this.save, SBSBridgeBot.SAVE_TIMEOUT);
-		await this.sbs.connect();
     }
 
+	/**
+	 * Is called when the Discord bot fires a "message create" event
+	 * @param msg The Discord message created from the event
+	 */
     private onMessage = async (msg: Message) => {
         if (msg.author === this.user)
             return;
@@ -92,40 +145,54 @@ export default class SBSBridgeBot extends Client {
 		} catch (e) {}
     }
 
-	private getSBSMessage(msg: Message | PartialMessage): Comment | undefined {
- 		const channel = this.channelList.getSBS(msg.channelId);
-        if (channel === undefined) 
-            return;
-        return channel.getCachedDiscordMessage(msg.id);
+	/**
+	 * Grabs an associated SBS message when given a Discord message
+	 * @param msg The Discord message to find the associated SBS message for
+	 * @returns The SBS message that the Discord message is associated to, if found
+	 */
+	private getSBSMessage(msg: Message | PartialMessage): Promise<Comment> {
+		return new Promise((resolve, reject) => {
+ 			const channel = this.channelList.getSBS(msg.channelId);
+        	if (channel === undefined) 
+            	reject("The associated message for SBS was not found.");
+        	resolve(channel.getCachedDiscordMessage(msg.id));
+		})
 	}
 
+	/**
+	 * Is called when the Discord bot fires a "message edit" event
+	 * @param before The message state before it was edited
+	 * @param after The message state after it was edited
+	 */
 	private onEdit = async (before: Message | PartialMessage, after: Message | PartialMessage) => {
-		try {
-			let message = this.getSBSMessage(before);
-        	let content = after.content + 
-            	after.attachments.map(x => `!${x.url}`).join('\n');
-			const username = after.member?.nickname 
-				|| after.author?.username
-				|| message!.settings.b 
-				|| message!.settings.n;
-			const avatar = message!.settings.a 
-				|| await this.getDiscordAvatar(after!.author!);
-			message?.edit(content, {m: '12y', b: username, a: avatar})
-		} catch (e) {
-		}
+		this.getSBSMessage(before)
+			.then(async msg => {
+        		let content = after.content + 
+            		after.attachments.map(x => `!${x.url}`).join('\n');
+				const username = after.member?.nickname 
+					|| after.author?.username
+					|| msg.settings.b 
+					|| msg.settings.n;
+				const avatar = msg.settings.a 
+					|| await this.getDiscordAvatar(after!.author!);
+				msg?.edit(content, {m: '12y', b: username, a: avatar})
+					.catch(err => console.error(err));
+			})
+			.catch(err => console.error(err));
 	}
 
 	private onDelete = (msg: Message | PartialMessage) => {
-		try {
-			let message = this.getSBSMessage(msg);
-			message!.delete();
-		} catch (e) {
-		}
+		this.getSBSMessage(msg)
+			.then(m => m.delete()
+				.catch(err => console.error(err)))
+			.catch(err => console.error(err));
 	}
 
 	private onSuccessfulPull = async (comments: Array<Comment>) => {
 		comments
 			.map(c => {
+				// we add zwsp in front of @s because webhooks defy all
+				// permissions when it comes to @s
 				c.textContent = c.textContent.replace('@', '@\u200b');
 				this.channelList.getAll()
 					.filter(x => x.sbs === c.parentId)
@@ -148,7 +215,7 @@ export default class SBSBridgeBot extends Client {
 						} else {
 							w.send({
 								'username': c.createUser?.username,
-								'avatarURL': c.createUser?.getAvatarLink(this.sbs.apiURL),
+								'avatarURL': c.createUser?.getAvatarLink(),
 								'content': c.textContent
 							})
 								.then(x => d.cacheSBSMessage(c, x as Message))
@@ -170,7 +237,7 @@ export default class SBSBridgeBot extends Client {
 
 	private load() {
 		try {
-			readFile(save_location, 'utf8', (err, data) => {
+			readFile(SBSBridgeBot.SAVE_LOCATION, 'utf8', (err, data) => {
 				if (err) {
 					console.error(err);
 					return;
@@ -188,7 +255,7 @@ export default class SBSBridgeBot extends Client {
 	}
 
 	private save = () => {
-		writeFile(save_location, JSON.stringify(this), err => {
+		writeFile(SBSBridgeBot.SAVE_LOCATION, JSON.stringify(this), err => {
 			if (err) {
 				console.error(err)
 			}
@@ -196,32 +263,32 @@ export default class SBSBridgeBot extends Client {
 		})
 	}
 
-	getDiscordAvatar = async (author: User): Promise<number> => {
-		const url = author.avatarURL()!;
-		const id = author.id;
-		let headers = this.sbs.formDataHeaders;
-		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar !== url) {
-			return axios.get(url, {responseType: 'arraybuffer'})
-				.then(x => sharp(x.data)
-					.toFile(`${id}.png`)
-					.then(() => {
-						const data = new FormData();
-
-						data.append('file', createReadStream(`${id}.png`));
-
-						return axios.post(`${this.sbs.apiURL}File?bucket=discordavatar`, data, {headers: {
-							'Content-Type': headers['Content-Type'],
-							'Authorization': headers['Authorization'],
-							...data.getHeaders()
-						}}).then(x => {
-							const sbsid = x.data.id;
-							this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
-							return sbsid;
-						}).catch(x => console.error(x))
-					}).catch(e => console.error(e)))
-					.catch(e => console.error(e))
-		}
+	private getDiscordAvatar = (author: User): Promise<number> => {
 		return new Promise((resolve, reject) => {
+			const url = author.avatarURL()!;
+			const id = author.id;
+			let headers = this.sbs.formDataHeaders;
+			if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar !== url) {
+				return axios.get(url, {responseType: 'arraybuffer'})
+					.then(x => sharp(x.data)
+						.toFile(`${id}.png`)
+						.then(() => {
+							const data = new FormData();
+
+							data.append('file', createReadStream(`${id}.png`));
+
+							return axios.post(`${this.sbs.apiURL}File?bucket=discordavatar`, data, {headers: {
+								'Content-Type': headers['Content-Type'],
+								'Authorization': headers['Authorization'],
+								...data.getHeaders()
+							}}).then(x => {
+								const sbsid = x.data.id;
+								this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
+								return sbsid;
+							}).catch(x => reject(x))
+						}).catch(e => reject(e)))
+						.catch(e => reject(e))
+			}
 			if (this.avatars.has(id))
 				resolve(this.avatars.get(id)!.sbsAvatar)
 			reject('Not able to get a SmileBASIC Source avatar for whatever reason???');

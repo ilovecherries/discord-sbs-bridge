@@ -197,11 +197,11 @@ export class Comment implements CommentData {
         // for convenience later on
         const createUserData = userlist.find(user => user.id === this.createUserId);
         if (createUserData !== undefined) 
-            this.createUser = new User(createUserData)
+            this.createUser = new User(createUserData, apiURL)
 
         const editUserData = userlist.find(user => user.id === this.editUserId);
         if (editUserData !== undefined) 
-            this.editUser = new User(editUserData)
+            this.editUser = new User(editUserData, apiURL)
         // extract the settings from the text
         try {
             const firstNewline = this.content.indexOf('\n');
@@ -238,27 +238,36 @@ export class Comment implements CommentData {
      * @param authtoken An authtoken to be used to edit the message if it doesn't already exist
      */
     edit(content: string, settings: CommentSettings = this.settings, 
-        authtoken: string | undefined = this.authtoken) {
-        this.content = `${JSON.stringify(settings)}\n${content}`;
-        const body = JSON.stringify(this);
-        if (authtoken) {
-            const headers = SmileBASICSource.generateHeaders(authtoken);
-            axios.put(`${this.apiURL}Comment/${this.id}`, body, {headers});
-        } else {
-            throw new Error("A valid auth token isn't available to edit the message.")
-        }
+        authtoken: string | undefined = this.authtoken): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.content = `${JSON.stringify(settings)}\n${content}`;
+            const body = JSON.stringify(this);
+            if (authtoken) {
+                const headers = SmileBASICSource.generateHeaders(authtoken);
+                axios.put(`${this.apiURL}Comment/${this.id}`, body, {headers})
+                    .then(() => resolve())
+                    .catch(err => reject(err));
+            } else {
+                reject("A valid auth token isn't available to edit the message.");
+            }
+
+        })
     }
 
     /**
      * Delete the current comment on the API endpoint
      * @param authtoken An authtoken to be used to edit the message if it doesn't already exist
      */
-    delete(authtoken: string | undefined = this.authtoken) {
-        if (authtoken) {
-            const headers = SmileBASICSource.generateHeaders(authtoken);
-            axios.delete(`${this.apiURL}Comment/${this.id}`, {headers});
-        } else {
-            throw new Error("A valid auth token isn't available to delete the message.")
-        }
+    delete(authtoken: string | undefined = this.authtoken): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (authtoken) {
+                const headers = SmileBASICSource.generateHeaders(authtoken);
+                axios.delete(`${this.apiURL}Comment/${this.id}`, {headers})
+                    .then(() => resolve())
+                    .catch(err => reject(err));
+            } else {
+                reject("A valid auth token isn't available to delete the message.")
+            }
+        })
     }
 }

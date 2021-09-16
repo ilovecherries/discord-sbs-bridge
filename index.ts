@@ -7,6 +7,7 @@ const username = process.env['SBS_USERNAME'] || '';
 const password = process.env['SBS_PASSWORD'] || '';
 
 const client = new Bot(
-	discord_token,
 	{username, password}
 )
+
+client.login(discord_token)
