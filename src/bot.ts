@@ -1,5 +1,4 @@
 import { REST } from '@discordjs/rest';
-import { Routes } from 'discord-api-types/v9';
 import { Client, ClientOptions, Intents, Interaction, Message, PartialMessage, User } from 'discord.js';
 import { CommandList } from './command';
 import LOADED_COMMANDS from './commandList';
@@ -42,6 +41,8 @@ export default class SBSBridgeBot extends Client {
 
 	/**
 	 * The file location where the save data will be preserved
+	 * @see load
+	 * @see save
 	 */
 	private static readonly SAVE_LOCATION: string = process.env['SAVE_LOCATION'] || 'save.json';
 
@@ -181,6 +182,10 @@ export default class SBSBridgeBot extends Client {
 			.catch(err => console.error(err));
 	}
 
+	/**
+	 * Is called when the Discord bot fires a "message delete" event
+	 * @param msg The message that was deleted
+	 */
 	private onDelete = (msg: Message | PartialMessage) => {
 		this.getSBSMessage(msg)
 			.then(m => m.delete()
@@ -188,6 +193,10 @@ export default class SBSBridgeBot extends Client {
 			.catch(err => console.error(err));
 	}
 
+	/**
+	 * Is called when the SBS wrapper successfully gets newly made comments
+	 * @param comments An array of comments to be processed and outputted
+	 */
 	private onSuccessfulPull = async (comments: Array<Comment>) => {
 		comments
 			.map(c => {
@@ -224,6 +233,10 @@ export default class SBSBridgeBot extends Client {
 					})});
 	}
 
+	/**
+	 * Is called when the Discord bot fires the "interaction create" event
+	 * @param interaction A slash command or any sort of interaction
+	 */
 	private onInteractionCreate(interaction: Interaction) {
 		this.commands.interactionHandler(interaction);
 	}
@@ -235,6 +248,10 @@ export default class SBSBridgeBot extends Client {
 		}
 	}
 
+	/**
+	 * Loads the data for the bot from SAVE_LOCATION
+	 * @see SAVE_LOCATION
+	 */
 	private load() {
 		try {
 			readFile(SBSBridgeBot.SAVE_LOCATION, 'utf8', (err, data) => {
@@ -254,6 +271,12 @@ export default class SBSBridgeBot extends Client {
 		}
 	}
 
+	/**
+	 * Saves the data for the bot in its current state to SAVE_LOCATION. It
+	 * happens in a loop with an offset of SAVE_TIMEOUT milliseconds.
+	 * @see SAVE_LOCATION
+	 * @see SAVE_TIMEOUT
+	 */
 	private save = () => {
 		writeFile(SBSBridgeBot.SAVE_LOCATION, JSON.stringify(this), err => {
 			if (err) {
@@ -263,6 +286,12 @@ export default class SBSBridgeBot extends Client {
 		})
 	}
 
+	/**
+	 * Uploads a Discord avatar to SBS if it has not already been uploaded and
+	 * returns the file ID associated with it.
+	 * @param author The author of the message to get the avatar of
+	 * @returns The SBS file ID that the avatar is associated to
+	 */
 	private getDiscordAvatar = (author: User): Promise<number> => {
 		return new Promise((resolve, reject) => {
 			const url = author.avatarURL()!;
