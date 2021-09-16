@@ -1,14 +1,20 @@
+/**
+ * User data as represented from the API
+ */
 export interface UserData {
     username: string;
     avatar: number;
     createDate: string;
-    special?: string;
+    special?: string | undefined;
     banned: boolean;
     super: boolean;
     registered: boolean;
     id: number;
 }
 
+/**
+ * Wrapper class for working with user data presented from the API
+ */
 export class User implements UserData {
     username: string;
     avatar: number;
