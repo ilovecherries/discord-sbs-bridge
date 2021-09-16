@@ -80,7 +80,8 @@ export default class SBSBridgeBot extends Client {
 	 * @param credentials The credentials for logging into SmileBASIC Source
 	 * @param options Client options such as intents, there are already sane defaults
 	 */
-    constructor(credentials: SBSLoginCredentials,
+    constructor(authtoken: string,
+				credentials: SBSLoginCredentials,
 				options: ClientOptions = {intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES]}) {
         super(options);
 
@@ -93,27 +94,16 @@ export default class SBSBridgeBot extends Client {
 		this.commands = LOADED_COMMANDS;
 		this.restConnection = new REST({version: '9'});
 
+		this.login(authtoken)
+			.then(s => { 
+				this.restConnection.setToken(authtoken);
+				this.sbs.connect()
+					.catch(err => console.error(err))
+			})
+			.catch(err => console.error(err));
 		this.load();
 		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
     }
-
-	/**
-	 * Creates a connection to both Discord and SBS
-	 * @param authtoken The authtoken to connect to Discord's API with
-	 * @returns not really... sure...
-	 */
-	login(authtoken?: string): Promise<string> {
-		return new Promise(async (resolve, reject) => {
-			super.login(authtoken)
-				.then(s => { 
-					this.restConnection.setToken(authtoken);
-					this.sbs.connect()
-						.then(() => resolve(s))
-						.catch(err => reject(err))
-				})
-				.catch(err => reject(err));
-		})
-	}
 
 	/**
 	 * Is called when the Discord bot is in "ready" state
