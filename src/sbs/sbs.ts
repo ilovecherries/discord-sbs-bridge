@@ -171,7 +171,8 @@ export class SmileBASICSource {
 							break;
 					}
 				} else {
-					console.warn("there was a timeout for listen request")
+					console.warn("there may have been timeout for listen request?");
+					console.warn(err);
 				}
 				this.loopTimeout = setTimeout(this.runForever, 0);
 			});
