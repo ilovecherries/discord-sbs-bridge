@@ -10,6 +10,7 @@ import axios from 'axios';
 import * as sharp from 'sharp';
 import * as FormData from 'form-data';
 import HttpMessageListener from './sbs/HttpMessageListener';
+import WebsocketMessageListener from './sbs/WebsocketMessageListener';
 
 
 /**
@@ -102,7 +103,8 @@ export default class SBSBridgeBot extends Client {
 		this.sbs = new SmileBASICSource(
 			this.onSuccessfulPull, 
 			credentials,
-			new HttpMessageListener()
+			new WebsocketMessageListener()
+			// new HttpMessageListener()
 		);
     }
 
@@ -138,7 +140,7 @@ export default class SBSBridgeBot extends Client {
 				.then(c => channel!.cacheDiscordMessage(msg, c))
 				.catch(err => console.error(err));
 		} catch (e) {
-			console.error(e);
+			console.warn(e);
 		}
     }
 

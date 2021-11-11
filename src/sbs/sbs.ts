@@ -128,43 +128,6 @@ export class SmileBASICSource {
 					this.loopTimeout = setTimeout(this.runForever, 0);
 				}
 			});
-
-		// axios.get(`${this.apiURL}Read/listen?actions=${JSON.stringify(listenerSettings)}`,
-		// 		  {headers})
-		// 	.then(async res => {
-		// 		if (this.loopTimeout === undefined)
-		// 			return;
-		// 		const status = res.status;
-		// 		this.lastID = res.data['lastId'];
-		// 		const comments: Array<Comment> = res.data.chains.comment.map(
-		// 			(c: CommentData) => new Comment(c, this.apiURL, res.data.chains.user, this.authtoken)
-		// 		)
-		// 		.filter((x: Comment) => x.createUserId !== this.userId);
-		// 		await this.successfulPullCallback(comments);
-		// 		this.loopTimeout = setTimeout(this.runForever, 0);
-		// 	})
-		// 	.catch(async (err: AxiosError) => {
-		// 		if (err.response) {
-		// 			const status = err.response!.status;
-
-		// 			switch (status) {
-		// 				case 401: // invalid auth
-		// 					console.error("auth token has expired");
-		// 					console.log("attempt to refresh auth token");
-		// 					await this.login();
-		// 					break;
-		// 				case 429: // rate limited
-		// 					console.error("rate limited");
-		// 					this.loopTimeout = setTimeout(this.runForever, SmileBASICSource.TOO_MANY_REQUESTS_WAIT);
-		// 					return;
-		// 					break;
-		// 			}
-		// 		} else {
-		// 			console.warn("there may have been timeout for listen request?");
-		// 			console.warn(err);
-		// 		}
-		// 		this.loopTimeout = setTimeout(this.runForever, 0);
-		// 	});
 	}
 
 	/**
