@@ -1,5 +1,7 @@
 import axios, { AxiosError } from 'axios';
+import { strategy } from 'sharp';
 import { Comment, CommentData, CommentSettings } from './Comment';
+import { AuthTokenError, IMessageListener } from './IMessageListener';
 
 export interface SBSLoginCredentials {
 	username: string;
@@ -40,25 +42,13 @@ export class SmileBASICSource {
 	authtoken: string = '';
 
 	/**
-	 * The ID in the most recent poll, this is used in order to make new
-	 * requests starting from this point.
-	 */
-	private lastID: number = -1;
-
-	/**
 	 * Stores the timeout for the infinite loop. This is so that if a
 	 * destructor is ever made at some point in time, this can be used to
 	 * cancel the infinite loop if it is undefined.
 	 */
 	private loopTimeout?: ReturnType<typeof setTimeout>;
 
-	// TODO: Should probably make it so that the filtering isn't handled by
-	// this, should leave that to other interfaces accessing this.
-	/**
-	 * This is used for filtering out requests from the user that is accessing
-	 * the API.
-	 */
-	private userId: number = -1;
+	private _MessageListener: IMessageListener;
 
 	/**
 	 * Creates a new SmileBASIC Source object that can be used later to
@@ -70,10 +60,12 @@ export class SmileBASICSource {
 	 */
 	constructor(onSuccessfulPull: Function,
 				credentials: SBSLoginCredentials,
+				messageListener: IMessageListener,
 			    apiURL?: string) {
 		this.successfulPullCallback = onSuccessfulPull;
 		this.credentials = credentials
 		this.apiURL = apiURL || this.apiURL;
+		this._MessageListener = messageListener;
 	}
 
 	/**
@@ -120,62 +112,59 @@ export class SmileBASICSource {
 	public get formDataHeaders(): any {
 		return SmileBASICSource.generateHeaders(this.authtoken, 'multipart/form-data');
 	}
-
-	/**
-	 * Settings that are used by the listener in order to make another request
-	 */
-	private get listenerSettings(): any {
-		return {
-			'lastId': this.lastID,
-			'chains': ['comment.0id', 'user.1createUserId',
-					   'content.1parentId']
-		}
-	}
 	
 	/**
 	 * The internal infinite loop that is used to make requests indefinitely
 	 * until loopTimeout is destroyed.
 	 */
 	private runForever = () => {
-		const headers = this.headers;
-		const listenerSettings = this.listenerSettings;
-
-		axios.get(`${this.apiURL}Read/listen?actions=${JSON.stringify(listenerSettings)}`,
-				  {headers})
-			.then(async res => {
-				if (this.loopTimeout === undefined)
-					return;
-				const status = res.status;
-				this.lastID = res.data['lastId'];
-				const comments: Array<Comment> = res.data.chains.comment.map(
-					(c: CommentData) => new Comment(c, this.apiURL, res.data.chains.user, this.authtoken)
-				)
-				.filter((x: Comment) => x.createUserId !== this.userId);
-				await this.successfulPullCallback(comments);
+		this._MessageListener.getMessages()
+			.then(async messages => {
+				await this.successfulPullCallback(messages);
 				this.loopTimeout = setTimeout(this.runForever, 0);
-			})
-			.catch(async (err: AxiosError) => {
-				if (err.response) {
-					const status = err.response!.status;
-
-					switch (status) {
-						case 401: // invalid auth
-							console.error("auth token has expired");
-							console.log("attempt to refresh auth token");
-							await this.login();
-							break;
-						case 429: // rate limited
-							console.error("rate limited");
-							this.loopTimeout = setTimeout(this.runForever, SmileBASICSource.TOO_MANY_REQUESTS_WAIT);
-							return;
-							break;
-					}
-				} else {
-					console.warn("there may have been timeout for listen request?");
-					console.warn(err);
+			}).catch(async err => {
+				if (err instanceof AuthTokenError) {
+					await this.login();
+					this.loopTimeout = setTimeout(this.runForever, 0);
 				}
-				this.loopTimeout = setTimeout(this.runForever, 0);
 			});
+
+		// axios.get(`${this.apiURL}Read/listen?actions=${JSON.stringify(listenerSettings)}`,
+		// 		  {headers})
+		// 	.then(async res => {
+		// 		if (this.loopTimeout === undefined)
+		// 			return;
+		// 		const status = res.status;
+		// 		this.lastID = res.data['lastId'];
+		// 		const comments: Array<Comment> = res.data.chains.comment.map(
+		// 			(c: CommentData) => new Comment(c, this.apiURL, res.data.chains.user, this.authtoken)
+		// 		)
+		// 		.filter((x: Comment) => x.createUserId !== this.userId);
+		// 		await this.successfulPullCallback(comments);
+		// 		this.loopTimeout = setTimeout(this.runForever, 0);
+		// 	})
+		// 	.catch(async (err: AxiosError) => {
+		// 		if (err.response) {
+		// 			const status = err.response!.status;
+
+		// 			switch (status) {
+		// 				case 401: // invalid auth
+		// 					console.error("auth token has expired");
+		// 					console.log("attempt to refresh auth token");
+		// 					await this.login();
+		// 					break;
+		// 				case 429: // rate limited
+		// 					console.error("rate limited");
+		// 					this.loopTimeout = setTimeout(this.runForever, SmileBASICSource.TOO_MANY_REQUESTS_WAIT);
+		// 					return;
+		// 					break;
+		// 			}
+		// 		} else {
+		// 			console.warn("there may have been timeout for listen request?");
+		// 			console.warn(err);
+		// 		}
+		// 		this.loopTimeout = setTimeout(this.runForever, 0);
+		// 	});
 	}
 
 	/**
@@ -188,14 +177,7 @@ export class SmileBASICSource {
 				this.authtoken = await this.login();
 
 			// this is so we can filter our own messages
-			const headers = this.headers;
-			axios.get(`${this.apiURL}User/me`, {headers})
-				.then(x => this.userId = x.data['id'])
-				.catch(err => reject(err));
-
-			const lastComment = await Comment.getWithLimit(10, this.apiURL);
-			lastComment.reverse();
-			this.lastID = lastComment.find(x => !x.deleted)!.id;
+			await this._MessageListener.start(this.authtoken);
 
 			this.loopTimeout = setTimeout(this.runForever, 0);
 			resolve();

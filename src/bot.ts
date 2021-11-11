@@ -9,6 +9,7 @@ import { createReadStream, writeFile, readFile } from 'fs';
 import axios from 'axios';
 import * as sharp from 'sharp';
 import * as FormData from 'form-data';
+import HttpMessageListener from './sbs/HttpMessageListener';
 
 
 /**
@@ -98,7 +99,11 @@ export default class SBSBridgeBot extends Client {
 			.then(() =>this.sbs.connect())
 			.catch(err => console.error(err));
 		this.load();
-		this.sbs = new SmileBASICSource(this.onSuccessfulPull, credentials);
+		this.sbs = new SmileBASICSource(
+			this.onSuccessfulPull, 
+			credentials,
+			new HttpMessageListener()
+		);
     }
 
 	/**
@@ -124,14 +129,17 @@ export default class SBSBridgeBot extends Client {
 			const webhook = await channel!.discordWebhook(this);
 			if (webhook.id === msg.author!.id)
 				return;
-        	let content = msg.content +
+        	const content = msg.content +
 				(msg.attachments.size > 0 && msg.content.length > 0 ? '\n' : '') +
 	            msg.attachments.map(x => `!${x.url}`).join('\n');
 			const username = msg.member?.nickname || msg.author.username;
-			this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: await this.getDiscordAvatar(msg.author)})
+			const avatar = await this.getDiscordAvatar(msg.author);
+			this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: avatar})
 				.then(c => channel!.cacheDiscordMessage(msg, c))
 				.catch(err => console.error(err));
-		} catch (e) {}
+		} catch (e) {
+			console.error(e);
+		}
     }
 
 	/**
