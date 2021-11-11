@@ -1,7 +1,8 @@
 import axios, { AxiosError } from 'axios';
 import { Comment, CommentData } from "./Comment";
 import { AuthTokenError, IMessageListener } from "./IMessageListener";
-import { WebSocket }  from 'ws';
+// import { WebSocket }  from 'ws';
+import WebSocket = require('ws');
 import { SmileBASICSource } from './sbs';
 
 export default class WebsocketMessageListener implements IMessageListener {
