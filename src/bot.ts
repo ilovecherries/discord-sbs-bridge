@@ -182,7 +182,7 @@ export default class SBSBridgeBot extends Client {
 				msg?.edit(content, {m: '12y', b: username, a: avatar})
 					.catch(err => console.error(err));
 			})
-			.catch(err => console.error(err));
+			.catch(err => console.warn(err));
 	}
 
 	/**
@@ -193,7 +193,7 @@ export default class SBSBridgeBot extends Client {
 		this.getSBSMessage(msg)
 			.then(m => m.delete()
 				.catch(err => console.error(err)))
-			.catch(err => console.error(err));
+			.catch(err => console.warn(err));
 	}
 
 	/**

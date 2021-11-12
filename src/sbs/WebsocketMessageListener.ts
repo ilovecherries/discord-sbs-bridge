@@ -11,8 +11,6 @@ export default class WebsocketMessageListener implements IMessageListener {
 
     private ws: WebSocket;
 
-    private userId: number;
-
     private queuedMessages = new Array<Comment>();
 
     private authtokenExpired: boolean = false;
@@ -34,36 +32,61 @@ export default class WebsocketMessageListener implements IMessageListener {
 
     start(authtoken: string): void {
         const headers = SmileBASICSource.generateHeaders(authtoken);
-        axios.get(`${this.apiURL}User/me`, {headers})
-        .then(async x => {
-            this.userId = x.data['id']
+
+        let lastId = -1;
+        let userId = -1;
+        let token = "";
+
+        const onOpen = () => {
+            const settings = this.generateListenerSettings(lastId, token);
+            this.ws.send(JSON.stringify(settings));
+        }
+
+        const onMessage = (msg: any) => {
+            try {
+                const data = JSON.parse(msg);
+                const comments: Array<Comment> = data.chains.comment.map(
+                    (c: CommentData) => new Comment(c, this.apiURL, 
+                        data.chains.user, authtoken)
+                )
+                    .filter((x: Comment) => x.createUserId !== userId);
+                this.queuedMessages = this.queuedMessages.concat(comments);
+            } catch {
+                const text = msg.toString();
+                if (text.startsWith("accepted")) {
+                    console.log("authenticated")
+                } else {
+                    console.error(msg.toString());
+                }
+            }
+        };
+
+        const onError = (msg: any) => {
+            console.error(msg.toString());
+        }
+
+        const startWebsocket = async () => {
+            console.log("(Re)Starting WebSocket");
+
             const res = await axios.get(`${this.apiURL}read/wsauth`, {headers});
-            const token = res.data as string;
+            token = res.data as string;
 
 			const lastComment = await Comment.getWithLimit(10, this.apiURL);
 			lastComment.reverse();
-			const lastId = lastComment.find(x => !x.deleted)!.id;
+			lastId = lastComment.find(x => !x.deleted)!.id;
 
             this.ws = new WebSocket(`${this.wsURL}read/wslisten`);
+            this.ws.on('open', onOpen);
+            this.ws.on('message', onMessage);
+            this.ws.on('error', onError);
+            this.ws.on('close', startWebsocket);
+        }
 
-            this.ws.on('open', () => {
-                const settings = this.generateListenerSettings(lastId, token);
-                this.ws.send(JSON.stringify(settings));
-            });
+        axios.get(`${this.apiURL}User/me`, {headers})
+        .then(async x => {
+            userId = x.data['id']
 
-            this.ws.on('message', (msg: any) => {
-                try {
-                    const data = JSON.parse(msg);
-                    const comments: Array<Comment> = data.chains.comment.map(
-                        (c: CommentData) => new Comment(c, this.apiURL, 
-                            data.chains.user, authtoken)
-                    )
-                        .filter((x: Comment) => x.createUserId !== this.userId);
-                    this.queuedMessages = this.queuedMessages.concat(comments);
-                } catch {
-                    console.error(msg.toString());
-                }
-            });
+            startWebsocket();
         })
     }
 
