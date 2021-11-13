@@ -205,7 +205,7 @@ export default class SBSBridgeBot extends Client {
 			.map(c => {
 				// filter out comments that are empty without whitespace
 				if (c.textContent.replace(/\s+/g, '').length === 0)
-					return;
+					c.textContent = 'ㅤ';
 				// we add zwsp in front of @s because webhooks defy all
 				// permissions when it comes to @s
 				c.textContent = c.textContent.replace('@', '@\u200b');
