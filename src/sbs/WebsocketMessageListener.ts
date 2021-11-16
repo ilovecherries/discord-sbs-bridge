@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosResponse } from 'axios';
 import { Comment, CommentData } from "./Comment";
 import { AuthTokenError, IMessageListener } from "./IMessageListener";
 // import { WebSocket }  from 'ws';
@@ -68,7 +68,24 @@ export default class WebsocketMessageListener implements IMessageListener {
         const startWebsocket = async () => {
             console.log("(Re)Starting WebSocket");
 
-            const res = await axios.get(`${this.apiURL}read/wsauth`, {headers});
+            let res: AxiosResponse
+
+            while (true) {
+                try {
+                    res = await axios.get(`${this.apiURL}read/wsauth`, {
+                        headers: headers
+                    });
+                    break;
+                } catch (e) {
+                    if (e.response) {
+                        if (e.response.status === 502) {
+                            // wait 5 minutes before attempting to reconnect
+                            await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000));
+                        }
+                    }
+                }
+            }
+
             token = res.data as string;
 
 			const lastComment = await Comment.getWithLimit(10, this.apiURL);
