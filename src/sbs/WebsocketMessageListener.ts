@@ -78,9 +78,11 @@ export default class WebsocketMessageListener implements IMessageListener {
                     break;
                 } catch (e) {
                     if (e.response) {
-                        if (e.response.status === 502) {
-                            // wait 5 minutes before attempting to reconnect
-                            await new Promise(resolve => setTimeout(resolve, 5 * 60 * 1000));
+                        switch (e.response.status) {
+                            case 401:
+                                this.authtokenExpired = true;
+                            case 502:
+                                await new Promise(resolve => setTimeout(resolve, 60 * 1000));
                         }
                     }
                 }
