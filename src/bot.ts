@@ -212,30 +212,31 @@ export default class SBSBridgeBot extends Client {
 				this.channelList.getAll()
 					.filter(x => x.sbs === c.parentId)
 					.map(async d => {
-						let w = await d.discordWebhook(this)
-						if (c.deleted) {
-							try {
-								let cachedMessage = d.getCachedSBSMessage(c.id)
-								w.deleteMessage(cachedMessage!.id);
+						await d.discordWebhook(this).then(w => {
+							if (c.deleted) {
+								try {
+									let cachedMessage = d.getCachedSBSMessage(c.id)
+									w.deleteMessage(cachedMessage!.id);
+								}
+								catch (e){}
+							} else if (c.editDate !== c.createDate) {
+								try {
+									let cachedMessage = d.getCachedSBSMessage(c.id)
+									w.editMessage(cachedMessage.id, {
+										content: c.textContent
+									});
+								}
+								catch (e){}
+							} else {
+								w.send({
+									'username': c.createUser?.username,
+									'avatarURL': c.createUser?.getAvatarLink(),
+									'content': c.textContent
+								})
+									.then(x => d.cacheSBSMessage(c, x as Message))
+									.catch(() => d.discordChannel(this).send('There was an error sending a message to Discord!'))
 							}
-							catch (e){}
-						} else if (c.editDate !== c.createDate) {
-							try {
-								let cachedMessage = d.getCachedSBSMessage(c.id)
-								w.editMessage(cachedMessage.id, {
-									content: c.textContent
-								});
-							}
-							catch (e){}
-						} else {
-							w.send({
-								'username': c.createUser?.username,
-								'avatarURL': c.createUser?.getAvatarLink(),
-								'content': c.textContent
-							})
-								.then(x => d.cacheSBSMessage(c, x as Message))
-								.catch(() => d.discordChannel(this).send('There was an error sending a message to Discord!'))
-						}
+						})
 					})});
 	}
 
