@@ -1,5 +1,6 @@
 # discord-sbs-bridge
  SmileBASIC Source Chat Bridge for Discord
+![image](https://user-images.githubusercontent.com/18371895/143506332-f38e5a9a-7f91-41b2-a2f7-31816c439225.png)
 
 ## configuration
 .env
