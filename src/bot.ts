@@ -234,7 +234,8 @@ export default class SBSBridgeBot extends Client {
 									'content': c.textContent
 								})
 									.then(x => d.cacheSBSMessage(c, x as Message))
-									.catch(() => d.discordChannel(this).send('There was an error sending a message to Discord!'))
+									.catch(() => d.discordChannel(this).send('There was an error sending a message to Discord!')
+										.catch(err => console.error(err)))
 							}
 						})
 					})});
