@@ -1280,7 +1280,7 @@ var toMd = node => {
 			return children();
 		case "a": {
 			const text = children();
-			return node.attr.href + (text ? " [" + text + "]" : "");
+			return node.attr.href + (text && text !== node.attr.href ? " [" + text + "] " : "");
 		}
 		case "img":
 			return node.attr.src + (node.attr.alt ? " [" + node.attr.alt + "]" : "");
