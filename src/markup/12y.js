@@ -1283,7 +1283,7 @@ var toMd = node => {
 			return node.attr.href + (text && text !== node.attr.href ? " [" + text + "] " : "");
 		}
 		case "img":
-			return node.attr.src + (node.attr.alt ? " [" + node.attr.alt + "]" : "");
+			return node.attr.src + (node.attr.alt ? " [" + node.attr.alt + "]" : "") + "\n";
 		case "br":
 			return "\n";
 		case "hr":
@@ -1301,7 +1301,7 @@ var toMd = node => {
 		case "s":
 			return "~~" + children() + "~~";
 		case "h":
-			return "#".repeat(node.attr.level + 1) + " " + children() + "\n";
+			return "#".repeat(node.attr.level) + " " + children() + "\n";
 		case "spoiler":
 			return (node.attr.spoiler ? "(spoiler: " + escapeMd(node.attr.spoiler) + ") " : "") +
 				"||" + children() + "||";
@@ -1337,6 +1337,10 @@ var toMd = node => {
 			return "{#sup " + children() + "}";
 		case "ruby":
 			return "{#ruby=" + escapeMd(node.attr.ruby) + " " + children() + "}";
+		case "bg":
+			return "{#bg=" + escapeMd(node.attr.color) + " " + children() + "}";
+		case "align":
+			return "{#align=" + escapeMd(node.attr.align) + " " + children() + "}";
 		default:
 			return children();
 	}
@@ -1559,7 +1563,10 @@ Parse.options = {
 	},
 	align(args) {
 		return createElement({
-			type: "div"
+			type: "align",
+			attr: {
+				align: args[""]
+			}
 		})
 	},
 	superscript() {
@@ -1603,10 +1610,10 @@ Parse.options = {
 	},
 	bg(opt) {
 		var node = {
-			type: "span"
-		}
-		if(opt[""]) {
-			node.attr["data-mx-bg-color"] = opt[""];
+			type: "bg",
+			attr: {
+				color: opt[""]
+			}
 		}
 		return createElement(node);
 	}
