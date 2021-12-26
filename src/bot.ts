@@ -309,37 +309,34 @@ export default class SBSBridgeBot extends Client {
 	 * @param author The author of the message to get the avatar of
 	 * @returns The SBS file ID that the avatar is associated to
 	 */
-	private getDiscordAvatar = (author: User): Promise<number> => {
-		return new Promise((resolve, reject) => {
-			const url = author.avatarURL()!;
-			const id = author.id;
-			let headers = this.sbs.formDataHeaders;
-			if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar !== url) {
-				return axios.get(url, { responseType: 'arraybuffer' })
-					.then(x => sharp(x.data)
-						.toFile(`${id}.png`)
-						.then(() => {
-							const data = new FormData();
+	private getDiscordAvatar = async (author: User): Promise<number> => {
+		const url = author.avatarURL()!;
+		const id = author.id;
+		let headers = this.sbs.formDataHeaders;
+		if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar !== url) {
+			return axios.get(url, { responseType: 'arraybuffer' })
+				.then(x => sharp(x.data)
+					.toFile(`${id}.png`)
+					.then(async () => {
+						const data = new FormData();
 
-							data.append('file', createReadStream(`${id}.png`));
+						data.append('file', createReadStream(`${id}.png`));
 
-							return axios.post(`${this.sbs.apiURL}File?bucket=discordavatar`, data, {
-								headers: {
-									'Content-Type': headers['Content-Type'],
-									'Authorization': headers['Authorization'],
-									...data.getHeaders()
-								}
-							}).then(x => {
-								const sbsid = x.data.id;
-								this.avatars.set(id, { sbsAvatar: sbsid, discordAvatar: url });
-								return sbsid;
-							}).catch(x => reject(x))
-						}).catch(e => reject(e)))
-					.catch(e => reject(e))
-			}
-			if (this.avatars.has(id))
-				resolve(this.avatars.get(id)!.sbsAvatar)
-			reject('Not able to get a SmileBASIC Source avatar for whatever reason???');
-		});
+						return axios.post(`${this.sbs.apiURL}File?bucket=discordavatar`, data, {
+							headers: {
+								'Content-Type': headers['Content-Type'],
+								'Authorization': headers['Authorization'],
+								...data.getHeaders()
+							}
+						}).then(x => {
+							const sbsid = x.data.id;
+							this.avatars.set(id, { sbsAvatar: sbsid, discordAvatar: url });
+							return sbsid;
+						})
+					}))
+		}
+		if (this.avatars.has(id))
+			return this.avatars.get(id)!.sbsAvatar
+		throw new Error('Not able to get a SmileBASIC Source avatar for whatever reason???');
 	}
 }
