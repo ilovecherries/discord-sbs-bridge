@@ -11,6 +11,8 @@ import * as sharp from 'sharp';
 import * as FormData from 'form-data';
 import HttpMessageListener from './sbs/HttpMessageListener';
 import WebsocketMessageListener from './sbs/WebsocketMessageListener';
+import { mdto12y } from './markup/md-to-12y'
+import { Parse, toMd } from './markup/12y'
 
 
 /**
@@ -26,7 +28,7 @@ class AvatarAssociation {
 		/**
 		 * The URL for the Discord avatar that associates with the avatar
 		 */
-		public discordAvatar: string){}
+		public discordAvatar: string) { }
 }
 
 
@@ -51,13 +53,13 @@ export default class SBSBridgeBot extends Client {
 	/**
 	 * A wrapper and manager for slash commmands
 	 */
-    private commands: CommandList = new CommandList();
+	private commands: CommandList = new CommandList();
 
 	/**
 	 * Handles channel pair associations between SmileBASIC Source and Discord
 	 * channels
 	 */
-    public channelList: ChannelPairHandler = new ChannelPairHandler();
+	public channelList: ChannelPairHandler = new ChannelPairHandler();
 
 	/**
 	 * A connection that is used for the bot to create interactions such as
@@ -82,67 +84,71 @@ export default class SBSBridgeBot extends Client {
 	 * @param credentials The credentials for logging into SmileBASIC Source
 	 * @param options Client options such as intents, there are already sane defaults
 	 */
-    constructor(authtoken: string,
-				credentials: SBSLoginCredentials,
-				options: ClientOptions = {intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES]}) {
-        super(options);
+	constructor(authtoken: string,
+		credentials: SBSLoginCredentials,
+		options: ClientOptions = { intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES] }) {
+		super(options);
 
 		this.on('ready', this.onReady);
-        this.on('messageCreate', this.onMessage);
-        this.on('interactionCreate', this.onInteractionCreate);
+		this.on('messageCreate', this.onMessage);
+		this.on('interactionCreate', this.onInteractionCreate);
 		this.on('messageUpdate', this.onEdit);
 		this.on('messageDelete', this.onDelete);
-		
+
 		this.commands = LOADED_COMMANDS;
-		this.restConnection = new REST({version: '9'}).setToken(authtoken);
+		this.restConnection = new REST({ version: '9' }).setToken(authtoken);
 
 		this.login(authtoken)
-			.then(() =>this.sbs.connect())
+			.then(() => this.sbs.connect())
 			.catch(err => console.error(err));
 		this.load();
 		this.sbs = new SmileBASICSource(
-			this.onSuccessfulPull, 
+			this.onSuccessfulPull,
 			credentials,
 			new WebsocketMessageListener()
 			// new HttpMessageListener()
 		);
-    }
+	}
 
 	/**
 	 * Is called when the Discord bot is in "ready" state
 	 */
-    private onReady = async () => {
-        console.log(`Logged in as ${this.user!.tag}`);
-		this.guilds.cache.map(x => 
+	private onReady = async () => {
+		console.log(`Logged in as ${this.user!.tag}`);
+		this.guilds.cache.map(x =>
 			this.commands.addSlashCommands(this, this.restConnection, x.id));
 		setTimeout(this.save, SBSBridgeBot.SAVE_TIMEOUT);
-    }
+	}
+
+	private getContents(msg: Message | PartialMessage) {
+		return mdto12y(msg.content) +
+			(msg.attachments.size > 0 && msg.content.length > 0 ? '\n' : '') +
+			msg.attachments.map(x => `!${x.url}`).join('\n');
+	}
 
 	/**
 	 * Is called when the Discord bot fires a "message create" event
 	 * @param msg The Discord message created from the event
 	 */
-    private onMessage = async (msg: Message) => {
-        if (msg.author === this.user)
-            return;
+	private onMessage = async (msg: Message) => {
+		if (msg.author === this.user)
+			return;
 		try {
 			const channel = this.channelList.getSBS(msg.channelId);
 			// filter it out if it's from the webhook
 			const webhook = await channel!.discordWebhook(this);
 			if (webhook.id === msg.author!.id)
 				return;
-        	const content = msg.content +
-				(msg.attachments.size > 0 && msg.content.length > 0 ? '\n' : '') +
-	            msg.attachments.map(x => `!${x.url}`).join('\n');
+			const content = this.getContents(msg);
 			const username = msg.member?.nickname || msg.author.username;
 			const avatar = await this.getDiscordAvatar(msg.author);
-			this.sbs.sendMessage(content, channel!.sbs, {m: '12y', b: username, a: avatar})
+			this.sbs.sendMessage(content, channel!.sbs, { m: '12y', b: username, a: avatar })
 				.then(c => channel!.cacheDiscordMessage(msg, c))
 				.catch(err => console.error(err));
 		} catch (e) {
 			console.warn(e);
 		}
-    }
+	}
 
 	/**
 	 * Grabs an associated SBS message when given a Discord message
@@ -151,9 +157,9 @@ export default class SBSBridgeBot extends Client {
 	 */
 	private getSBSMessage(msg: Message | PartialMessage): Promise<Comment> {
 		return new Promise((resolve, reject) => {
- 			const channel = this.channelList.getSBS(msg.channelId);
-        	if (channel === undefined) 
-            	reject("The associated message for SBS was not found.");
+			const channel = this.channelList.getSBS(msg.channelId);
+			if (channel === undefined)
+				reject("The associated message for SBS was not found.");
 			try {
 				const message = channel.getCachedDiscordMessage(msg.id);
 				resolve(message);
@@ -171,15 +177,14 @@ export default class SBSBridgeBot extends Client {
 	private onEdit = async (before: Message | PartialMessage, after: Message | PartialMessage) => {
 		this.getSBSMessage(before)
 			.then(async msg => {
-        		let content = after.content + 
-            		after.attachments.map(x => `!${x.url}`).join('\n');
-				const username = after.member?.nickname 
+				const content = this.getContents(after);
+				const username = after.member?.nickname
 					|| after.author?.username
-					|| msg.settings.b 
+					|| msg.settings.b
 					|| msg.settings.n;
-				const avatar = msg.settings.a 
+				const avatar = msg.settings.a
 					|| await this.getDiscordAvatar(after!.author!);
-				msg?.edit(content, {m: '12y', b: username, a: avatar})
+				msg?.edit(content, { m: '12y', b: username, a: avatar })
 					.catch(err => console.error(err));
 			})
 			.catch(err => console.warn(err));
@@ -209,6 +214,7 @@ export default class SBSBridgeBot extends Client {
 				// we add zwsp in front of @s because webhooks defy all
 				// permissions when it comes to @s
 				c.textContent = c.textContent.replace('@', '@\u200b');
+				const content = toMd(Parse.parseLang(c.textContent, '12y', false))
 				this.channelList.getAll()
 					.filter(x => x.sbs === c.parentId)
 					.map(async d => {
@@ -218,27 +224,30 @@ export default class SBSBridgeBot extends Client {
 									let cachedMessage = d.getCachedSBSMessage(c.id)
 									w.deleteMessage(cachedMessage!.id);
 								}
-								catch (e){}
+								catch (e) { }
 							} else if (c.editDate !== c.createDate) {
 								try {
 									let cachedMessage = d.getCachedSBSMessage(c.id)
 									w.editMessage(cachedMessage.id, {
-										content: c.textContent
+										content
 									});
 								}
-								catch (e){}
+								catch (e) {
+									console.error(e)
+								}
 							} else {
 								w.send({
 									'username': c.createUser?.username,
 									'avatarURL': c.createUser?.getAvatarLink(),
-									'content': c.textContent
+									'content': content
 								})
 									.then(x => d.cacheSBSMessage(c, x as Message))
 									.catch(() => d.discordChannel(this).send('There was an error sending a message to Discord!')
 										.catch(err => console.error(err)))
 							}
 						})
-					})});
+					})
+			});
 	}
 
 	/**
@@ -269,13 +278,13 @@ export default class SBSBridgeBot extends Client {
 				}
 				const parsedData = JSON.parse(data);
 				parsedData!.channels!
-					.map((x: ChannelPairConfig) => 
+					.map((x: ChannelPairConfig) =>
 						this.channelList.set(x.discordChannelId, x.sbsChannelId));
 				const avatars: any = new Map<string, AvatarAssociation>(Object.entries(parsedData!.avatars!));
 				this.avatars = avatars;
 			})
 		} catch (e) {
-			console.error("There was an error trying to load the save file:\n"+e);
+			console.error("There was an error trying to load the save file:\n" + e);
 		}
 	}
 
@@ -306,7 +315,7 @@ export default class SBSBridgeBot extends Client {
 			const id = author.id;
 			let headers = this.sbs.formDataHeaders;
 			if (!this.avatars.has(id) || this.avatars.get(id)!.discordAvatar !== url) {
-				return axios.get(url, {responseType: 'arraybuffer'})
+				return axios.get(url, { responseType: 'arraybuffer' })
 					.then(x => sharp(x.data)
 						.toFile(`${id}.png`)
 						.then(() => {
@@ -314,17 +323,19 @@ export default class SBSBridgeBot extends Client {
 
 							data.append('file', createReadStream(`${id}.png`));
 
-							return axios.post(`${this.sbs.apiURL}File?bucket=discordavatar`, data, {headers: {
-								'Content-Type': headers['Content-Type'],
-								'Authorization': headers['Authorization'],
-								...data.getHeaders()
-							}}).then(x => {
+							return axios.post(`${this.sbs.apiURL}File?bucket=discordavatar`, data, {
+								headers: {
+									'Content-Type': headers['Content-Type'],
+									'Authorization': headers['Authorization'],
+									...data.getHeaders()
+								}
+							}).then(x => {
 								const sbsid = x.data.id;
-								this.avatars.set(id, {sbsAvatar: sbsid, discordAvatar: url});
+								this.avatars.set(id, { sbsAvatar: sbsid, discordAvatar: url });
 								return sbsid;
 							}).catch(x => reject(x))
 						}).catch(e => reject(e)))
-						.catch(e => reject(e))
+					.catch(e => reject(e))
 			}
 			if (this.avatars.has(id))
 				resolve(this.avatars.get(id)!.sbsAvatar)
