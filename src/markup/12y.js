@@ -1280,7 +1280,10 @@ var toMd = node => {
 			return children();
 		case "a": {
 			const text = children();
-			return node.attr.href + (text && text !== node.attr.href ? " [" + text + "] " : "");
+			const href = node.attr.href.startsWith("sbs:") ?
+				"https://smilebasicsource.com/?p=" + node.attr.href.substr(4).replace(/\//g, "-")
+				: node.attr.href;
+			return href + (text && text !== node.attr.href ? " [" + text + "] " : "");
 		}
 		case "img":
 			return node.attr.src + (node.attr.alt ? " [" + node.attr.alt + "]" : "") + "\n";
@@ -1509,7 +1512,6 @@ Parse.options = {
 	},
 	simpleLink(args) {
 		var link = this.createLink(args[""]);
-		link.node.children = [args[""]];
 		return link;
 	},
 	customLink(args) {
