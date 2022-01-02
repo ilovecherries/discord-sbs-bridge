@@ -121,7 +121,7 @@ const to12y = tokens => {
 				break;
 			}
 			case "blockQuote":
-				out += ">{" + to12y(token.content) + "}";
+				out += ">{" + to12y(token.content) + "}\n";
 				break;
 		}
 	}
