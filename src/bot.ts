@@ -175,30 +175,52 @@ export default class SBSBridgeBot extends Client {
 	 * @param after The message state after it was edited
 	 */
 	private onEdit = async (before: Message | PartialMessage, after: Message | PartialMessage) => {
-		this.getSBSMessage(before)
-			.then(async msg => {
-				const content = this.getContents(after);
-				const username = after.member?.nickname
-					|| after.author?.username
-					|| msg.settings.b
-					|| msg.settings.n;
-				const avatar = msg.settings.a
-					|| await this.getDiscordAvatar(after!.author!);
-				msg?.edit(content, { m: '12y', b: username, a: avatar })
-					.catch(err => console.error(err));
-			})
-			.catch(err => console.warn(err));
+		if (before.author === this.user)
+			return;
+		try {
+			const channel = this.channelList.getSBS(before.channelId);
+			// filter it out if it's from the webhook
+			const webhook = await channel!.discordWebhook(this);
+			if (webhook.id === before.author!.id)
+				return;
+			this.getSBSMessage(before)
+				.then(async msg => {
+					const content = this.getContents(after);
+					const username = after.member?.nickname
+						|| after.author?.username
+						|| msg.settings.b
+						|| msg.settings.n;
+					const avatar = msg.settings.a
+						|| await this.getDiscordAvatar(after!.author!);
+					msg?.edit(content, { m: '12y', b: username, a: avatar })
+						.catch(err => console.error(err));
+				})
+				.catch(err => console.warn(err));
+		} catch (e) {
+			console.error(e)
+		}
 	}
 
 	/**
 	 * Is called when the Discord bot fires a "message delete" event
 	 * @param msg The message that was deleted
 	 */
-	private onDelete = (msg: Message | PartialMessage) => {
-		this.getSBSMessage(msg)
-			.then(m => m.delete()
-				.catch(err => console.error(err)))
-			.catch(err => console.warn(err));
+	private onDelete = async (msg: Message | PartialMessage) => {
+		if (msg.author === this.user)
+			return;
+		try {
+			const channel = this.channelList.getSBS(msg.channelId);
+			// filter it out if it's from the webhook
+			const webhook = await channel!.discordWebhook(this);
+			if (webhook.id === msg.author!.id)
+				return;
+			this.getSBSMessage(msg)
+				.then(m => m.delete()
+					.catch(err => console.error(err)))
+				.catch(err => console.warn(err));
+		} catch (e) {
+			console.error(e)
+		}
 	}
 
 	/**
