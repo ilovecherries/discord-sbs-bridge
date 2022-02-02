@@ -1240,7 +1240,7 @@ Parse.BLOCKS = {
 		}*/
 	}
 })()
-var escapeMd = text => text
+var escapeMd = text => String(text)
 	.replace(/\*/g, "\\*")
 	.replace(/`/g, "\\`")
 	.replace(/_/g, "\\_")
