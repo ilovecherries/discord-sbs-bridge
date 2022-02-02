@@ -1240,11 +1240,7 @@ Parse.BLOCKS = {
 		}*/
 	}
 })()
-var escapeMd = text => String(text)
-	.replace(/\*/g, "\\*")
-	.replace(/`/g, "\\`")
-	.replace(/_/g, "\\_")
-	.replace(/~/g, "\\~")
+var escapeMd = text => String(text).replace(/[*`_~]/g, "\\$&")
 
 function createElement(node, branch) {
 	return {
