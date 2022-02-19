@@ -208,7 +208,7 @@ export class Comment implements CommentData {
                 this.content.substring(0, firstNewline)
             );
             this.settings = settings;
-            this.textContent = this.content.substring(firstNewline);
+            this.textContent = this.content.substring(firstNewline + 1);
         // if the json couldn't be parsed, then that probably means there are no
         // settings sent in the message
         } catch (Error) {
