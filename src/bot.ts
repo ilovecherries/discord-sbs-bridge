@@ -160,12 +160,11 @@ export default class SBSBridgeBot extends Client {
 			const channel = this.channelList.getSBS(msg.channelId);
 			if (channel === undefined)
 				reject("The associated message for SBS was not found.");
-			try {
-				const message = channel.getCachedDiscordMessage(msg.id);
+			const message = channel.getCachedDiscordMessage(msg.id);
+			if (message)
 				resolve(message);
-			} catch (err) {
-				reject(err);
-			}
+			else
+				reject("The associated message for SBS was not found.");
 		})
 	}
 
@@ -242,20 +241,17 @@ export default class SBSBridgeBot extends Client {
 					.map(async d => {
 						await d.discordWebhook(this).then(w => {
 							if (c.deleted) {
-								try {
-									let cachedMessage = d.getCachedSBSMessage(c.id)
+								let cachedMessage = d.getCachedSBSMessage(c.id)
+								if (cachedMessage) {
 									w.deleteMessage(cachedMessage!.id);
 								}
-								catch (e) { }
 							} else if (c.editDate !== c.createDate) {
-								try {
-									let cachedMessage = d.getCachedSBSMessage(c.id)
+								let cachedMessage = d.getCachedSBSMessage(c.id)
+								if (cachedMessage) {
 									w.editMessage(cachedMessage.id, {
 										content
-									});
-								}
-								catch (e) {
-									console.error(e)
+									}).catch(() => d.discordChannel(this).send('There was an error editing a message on Discord')
+										.catch(err => console.error(err)));
 								}
 							} else {
 								w.send({

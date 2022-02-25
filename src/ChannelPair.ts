@@ -137,11 +137,8 @@ export class ChannelPair {
 	 * @param id The SmileBASIC Source comment ID
 	 * @returns The result Discord message that it is linked to
 	 */
-	public getCachedSBSMessage(id: number): Message {
-		let msg = this.sbsMsgs.get(id);
-		if (msg === undefined)
-			throw new Error("Unable to find cached message")
-		return msg!;
+	public getCachedSBSMessage(id: number): Message | undefined{
+		return this.sbsMsgs.get(id);
 	}
 
 	/**	
@@ -150,11 +147,8 @@ export class ChannelPair {
 	 * @param id The Discord message ID
 	 * @returns The result SmileBASIC Source comment that it is linked to
 	 */
-	public getCachedDiscordMessage(id: string): Comment {
-		let msg = this.disMsgs.get(id);
-		if (msg === undefined)
-			throw new Error("Unable to find cached message")
-		return msg!;
+	public getCachedDiscordMessage(id: string): Comment | undefined {
+		return this.disMsgs.get(id);
 	}
 
     public get sbs() {return this.sbsChannelId}
