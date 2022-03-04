@@ -123,7 +123,12 @@ export default class SBSBridgeBot extends Client {
 	private getContents(msg: Message | PartialMessage) {
 		return mdto12y(msg.content) +
 			(msg.attachments.size > 0 && msg.content.length > 0 ? '\n' : '') +
-			msg.attachments.map(x => `!${x.url}`).join('\n');
+			msg.attachments.map(x => {
+				let image = `!${x.url}`
+				if (x.spoiler)
+					image = `{#spoiler=image ${image}}`
+				return image
+			}).join('\n');
 	}
 
 	/**
